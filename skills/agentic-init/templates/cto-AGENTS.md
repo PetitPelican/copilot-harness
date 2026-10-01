@@ -8,9 +8,21 @@ qui attend une décision de sa part**. Dans les `todo.md`, `@user` désigne
 [UTILISATEUR], l'humain qui commande l'atelier, défini à l'initialisation.
 
 La **méthode** — mémoire, hooks, skills, frontières — est dans le `AGENTS.md`
-de `<racine>` ; `adopte` en pose aussi une copie dans
+de la racine de l'atelier ; `adopte` en pose aussi une copie dans
 `.github/copilot-instructions.md` de ce dépôt pour la charger sans dépendre
 de l'environnement de l'app. Ne la redis pas dans le rôle.
+
+## Où sont les choses
+
+- **Racine de l'atelier : `[RACINE]`.** Chaque projet a son propre dossier
+  directement sous cette racine, avec son propre dépôt git. Ne crée jamais un
+  projet à côté de ton dossier courant : dans l'app Copilot, ta session peut
+  tourner dans une copie de travail située ailleurs sur le disque — le briefing
+  le signale quand c'est le cas.
+- **Paquet du harnais : `[PAQUET]`.** Les fiches citées ci-dessous
+  (`skills/…`) s'y trouvent.
+- **Commande : `harnais`.** Si ton terminal ne la reconnaît pas, le briefing
+  donne son chemin complet ; ne la remplace jamais par un script improvisé.
 
 ## Accueil après redémarrage
 

@@ -15,6 +15,8 @@ $userBefore = [Environment]::GetEnvironmentVariable('COPILOT_CUSTOM_INSTRUCTIONS
 $processBefore = $env:COPILOT_CUSTOM_INSTRUCTIONS_DIRS
 $originalLocalAppData = $env:LOCALAPPDATA
 $originalPath = $env:PATH
+$userPathBefore = ([Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment')).GetValue('Path', $null,
+    [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
 $passed = 0
 
 function Assert($Condition, [string]$Message) {
@@ -161,6 +163,9 @@ try {
     & $installer @params -Go
     Assert ((Get-FileHash -LiteralPath $settingsPath).Hash -eq $beforeSettings.Hash) 'Repeat installation does not rewrite settings'
     Assert (@($env:COPILOT_CUSTOM_INSTRUCTIONS_DIRS -split ',' | Where-Object { $_ -eq $workshop }).Count -eq 1) 'Repeat installation does not duplicate environment token'
+    $binDir = Join-Path $destination 'bin'
+    Assert (@($env:PATH -split ';' | Where-Object { $_ -eq $binDir }).Count -eq 1) 'Install adds the package bin to PATH exactly once'
+    Assert ((Get-Command harnais -ErrorAction SilentlyContinue) -and (& harnais version) -match '^\d+\.\d+\.\d+') 'The harnais command resolves through PATH'
 
     $sourceCriterion = Join-Path $source 'criteres-passe.md'
     Write-Text $sourceCriterion 'NEW DISTRIBUTION VERSION'
@@ -186,6 +191,7 @@ try {
     Assert ($remaining.enabledPlugins.'new@other' -and $remaining.enabledPlugins.'other@market') 'Uninstall preserves original and subsequently added settings'
     Assert (!($remaining.enabledPlugins.PSObject.Properties.Name -contains 'harnais@atelier-copilot')) 'Uninstall removes only owned plugin key'
     Assert ($env:COPILOT_CUSTOM_INSTRUCTIONS_DIRS -ceq 'C:\existing-one, C:\existing-two ,C:\added-later') 'Uninstall removes only owned environment token'
+    Assert (@($env:PATH -split ';' | Where-Object { $_ -eq $binDir }).Count -eq 0 -and $env:PATH.Contains($originalPath.Split(';')[0])) 'Uninstall removes only the package bin from PATH'
     $globalRemaining = Get-Content -LiteralPath (Join-Path $config 'settings.json') -Raw | ConvertFrom-Json
     Assert ($globalRemaining.customUnrelatedSetting -eq 'global-keep' -and $globalRemaining.enabledPlugins.'existing@other' -eq $false) 'CLI uninstall preserves unrelated global configuration'
     Assert (!($globalRemaining.enabledPlugins.PSObject.Properties.Name -contains 'harnais@atelier-copilot')) 'Uninstall removes owned global disable tombstone'
@@ -241,6 +247,32 @@ try {
     Fails { & $installer @globalConflict -Go } 'Existing global harnais configuration is unowned'
     Assert (!(Test-Path -LiteralPath $globalConflict.Destination)) 'Unowned global integration rejected without payload writes'
     Assert ([Environment]::GetEnvironmentVariable('COPILOT_CUSTOM_INSTRUCTIONS_DIRS', 'User') -ceq $userBefore) 'Actual User environment unchanged'
+    $userPathAfter = ([Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment')).GetValue('Path', $null,
+        [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+    Assert ($userPathAfter -ceq $userPathBefore) 'Actual User PATH unchanged by Process-scope runs'
+
+    # The User-scope PATH helpers, on a throwaway registry key: the value kind
+    # (REG_EXPAND_SZ) and its %VARIABLES% must survive an add and a remove.
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile($installer, [ref]$null, [ref]$null)
+    foreach ($f in $ast.FindAll({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+            $n.Name -in @('Same-Dir', 'Add-PathToken', 'Remove-PathToken', 'Get-UserPath', 'Set-UserPath') }, $true)) {
+        . ([scriptblock]::Create($f.Extent.Text))
+    }
+    $testKey = 'Software\HarnaisInstallerTest-' + [guid]::NewGuid().ToString('N')
+    try {
+        $k = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($testKey)
+        $k.SetValue('Path', '%USERPROFILE%\tools;C:\keep', [Microsoft.Win32.RegistryValueKind]::ExpandString); $k.Dispose()
+        $u = Get-UserPath $testKey
+        Set-UserPath (Add-PathToken $u.value 'C:\pkg\bin') $u.kind $testKey
+        $u2 = Get-UserPath $testKey
+        Assert ($u2.value -ceq '%USERPROFILE%\tools;C:\keep;C:\pkg\bin' -and $u2.kind -eq 'ExpandString') 'User PATH add keeps %VARIABLES% and REG_EXPAND_SZ'
+        Assert ((Add-PathToken $u2.value 'c:\PKG\bin\') -ceq $u2.value) 'User PATH add is idempotent (case and trailing slash)'
+        Set-UserPath (Remove-PathToken $u2.value 'C:\pkg\bin') $u2.kind $testKey
+        $u3 = Get-UserPath $testKey
+        Assert ($u3.value -ceq '%USERPROFILE%\tools;C:\keep' -and $u3.kind -eq 'ExpandString') 'User PATH remove restores the value and its kind'
+    } finally {
+        [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree($testKey, $false)
+    }
     Write-Host "$passed installer checks passed."
 } finally {
     $env:COPILOT_CUSTOM_INSTRUCTIONS_DIRS = $processBefore

@@ -191,6 +191,15 @@ même si le principal en possède une. Le carnet est également local au worktre
 partager des changements se fait par Git, pas par une écriture invisible dans
 le checkout d'un autre agent.
 
+L'app Copilot ouvre chaque session dans une telle copie, rangée sous
+`~/.copilot/repos/copilot-worktrees/` : les dossiers voisins de l'agent ne
+sont alors pas l'atelier. Le briefing le dit (ligne `lieu`), avec la branche et
+le dépôt principal, et `atelier-monte` écrit dans le rôle du CTO le chemin
+absolu de l'atelier et celui du paquet, pour qu'aucun chemin ne soit déduit du
+dossier courant. Quand le terminal de la session ne trouve pas `harnais`, le
+briefing donne son chemin complet (ligne `commande`) ; l'installateur ajoute
+`bin/` au PATH de l'utilisateur pour que ce cas reste l'exception.
+
 Copilot n'a pas de mémoire de notes locale indexée par chemin. Les constats durables
 vont dans `brain/` ou `docs/`, les leçons transversales dans la méthode après
 validation. `~/.copilot/session-state/` conserve les sessions, pas une quatrième

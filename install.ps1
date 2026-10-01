@@ -259,6 +259,82 @@ function Remove-Environment {
     }
 }
 
+# PATH: `<Destination>\bin` makes the `harnais` command that skills and messages
+# cite resolve in agent sessions. The User value is edited in the registry with
+# its original kind: [Environment]::SetEnvironmentVariable would rewrite it as
+# REG_SZ and freeze every %VARIABLE% it contains.
+$script:PathEnvKey = 'Environment'
+
+function Same-Dir([string]$A, [string]$B) {
+    return $A.Trim().TrimEnd('\').Equals($B.Trim().TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase)
+}
+
+function Add-PathToken([string]$Value, [string]$Token) {
+    foreach ($p in @(if ($Value) { $Value -split ';' })) { if ($p -and (Same-Dir $p $Token)) { return $Value } }
+    if ([string]::IsNullOrEmpty($Value)) { return $Token }
+    return $Value.TrimEnd(';') + ';' + $Token
+}
+
+function Remove-PathToken([string]$Value, [string]$Token) {
+    if ([string]::IsNullOrEmpty($Value)) { return $Value }
+    return (@($Value -split ';' | Where-Object { !($_ -and (Same-Dir $_ $Token)) }) -join ';')
+}
+
+function Get-UserPath([string]$Key = $script:PathEnvKey) {
+    $k = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($Key, $false)
+    if (!$k) { return @{ value = $null; kind = [Microsoft.Win32.RegistryValueKind]::ExpandString } }
+    try {
+        $v = $k.GetValue('Path', $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        $kind = if ($null -eq $v) { [Microsoft.Win32.RegistryValueKind]::ExpandString } else { $k.GetValueKind('Path') }
+        return @{ value = $v; kind = $kind }
+    } finally { $k.Dispose() }
+}
+
+function Set-UserPath([string]$Value, $Kind, [string]$Key = $script:PathEnvKey) {
+    $k = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($Key)
+    try { $k.SetValue('Path', $Value, $Kind) } finally { $k.Dispose() }
+    if ($Key -eq 'Environment') {
+        # Same WM_SETTINGCHANGE broadcast as SetEnvironmentVariable, so new
+        # terminals and the Copilot app see the change without a logoff.
+        [Environment]::SetEnvironmentVariable('HARNAIS_ENV_REFRESH', '1', 'User')
+        [Environment]::SetEnvironmentVariable('HARNAIS_ENV_REFRESH', $null, 'User')
+    }
+}
+
+function Add-BinPath {
+    if ($EnvironmentScope -eq 'None') { return }
+    $bin = Join-Path $Destination 'bin'
+    if (!$script:State.ContainsKey('path') -or !$script:State.path) { $script:State.path = @{} }
+    if ($EnvironmentScope -eq 'User') {
+        $u = Get-UserPath
+        $after = Add-PathToken $u.value $bin
+        if ($after -cne $u.value) {
+            $script:State.path['User'] = $true
+            Save-State
+            Set-UserPath $after $u.kind
+        }
+    }
+    $p = Add-PathToken $env:Path $bin
+    if ($p -cne $env:Path) {
+        $script:State.path['Process'] = $true
+        Save-State
+        $env:Path = $p
+    }
+}
+
+function Remove-BinPath {
+    if (!$script:State.ContainsKey('path') -or !$script:State.path) { return }
+    $bin = Join-Path $Destination 'bin'
+    if ($script:State.path.ContainsKey('User')) {
+        $u = Get-UserPath
+        $after = Remove-PathToken $u.value $bin
+        if ($after -cne $u.value) { Set-UserPath $after $u.kind }
+    }
+    if ($script:State.path.ContainsKey('Process')) { $env:Path = Remove-PathToken $env:Path $bin }
+    $script:State.path = @{}
+    Save-State
+}
+
 function Settings-Plan([string]$Path = (Join-Path (Join-Path $WorkshopRoot $CtoName) '.github\copilot\settings.json')) {
     Assert-NoLinks $path
     $settings = if (Test-Path -LiteralPath $path) { Read-Json $path } else { @{} }
@@ -490,6 +566,9 @@ if (!$Go -or !$script:InstallerPSCmdlet.ShouldProcess($Destination, "$Action har
     } else {
         Write-Host "Install/update runs: copilot plugin marketplace add `"$Destination`"; copilot plugin install $script:Plugin"
         Write-Host "Workshop command: harnais atelier-monte --racine `"$WorkshopRoot`" --cto `"$CtoName`" --utilisateur `"$UserName`" --go"
+        if ($EnvironmentScope -ne 'None') {
+            Write-Host "PATH ($EnvironmentScope): add $(Join-Path $Destination 'bin') so that the ``harnais`` command resolves in agent sessions (removed on uninstall)."
+        }
     }
     return
 }
@@ -516,6 +595,7 @@ try {
         Remove-OwnedSettings $script:State.cliSettings $false
         if ($memoryOwned) { Restore-Memory $script:State.memory }
         Remove-Environment
+        Remove-BinPath
         foreach ($rel in @($script:State.files.Keys)) {
             $path = Join-Path $Destination $rel
             if (Test-Path -LiteralPath $path -PathType Leaf) {
@@ -588,6 +668,7 @@ try {
             }
         }
         Add-Environment
+        Add-BinPath
         Write-Host "Installed. Fill CTO memory, then open a NEW Copilot session in $cto."
     }
     if ($EnvironmentScope -eq 'User') {
@@ -596,6 +677,7 @@ try {
         Write-Host 'Process-only environment: start the next Copilot session from THIS PowerShell process.'
     } else {
         Write-Host "Environment unchanged. Preserve existing comma-separated values and add $WorkshopRoot to $script:EnvironmentName before starting Copilot."
+        Write-Host "Add $(Join-Path $Destination 'bin') to PATH yourself, or agents will not find the ``harnais`` command."
     }
     Write-Host 'Hooks are not proven until a briefing is observed in that new session.'
 } finally {

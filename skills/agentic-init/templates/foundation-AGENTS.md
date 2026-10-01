@@ -273,7 +273,12 @@ protection.
   briefing dans une session identifiée ; un changement le rafraîchit au prompt
   suivant. Sans identifiant de session, la déduplication n'est pas garantie.
   Chaque worktree Copilot lit son propre `brain/`, jamais celui du checkout
-  principal ; le carnet est donc lui aussi local à cette copie.
+  principal ; le carnet est donc lui aussi local à cette copie. Quand la
+  session tourne dans une telle copie (l'app Copilot en ouvre une par session),
+  le briefing le dit et nomme le dépôt principal : ses dossiers voisins ne sont
+  pas l'atelier, et rien de ce qui y est écrit n'arrive dans le projet avant
+  d'être commité puis fusionné. Il donne aussi le chemin complet de `harnais`
+  quand le terminal de la session ne trouve pas la commande.
   Il laisse hors du projet une **trace d'entrée** datée, avec la
   version qui l'a écrite : c'est la preuve que l'agent est servi.
 

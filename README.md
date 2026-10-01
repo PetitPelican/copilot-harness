@@ -118,8 +118,18 @@ Fermer puis rouvrir le terminal et l'app Copilot pour hériter de
 l'environnement utilisateur. Ouvrir une nouvelle session sur
 `C:\Atelier\cto`, renseigner sa mémoire et commiter le dépôt pour
 que les nouvelles sessions en worktree héritent de ses fichiers.
-L'installateur ne modifie pas le PATH ; les commandes suivantes
-utilisent explicitement le lanceur installé.
+L'installateur ajoute `…\bin` du plugin au PATH de l'utilisateur, pour que la
+commande `harnais` citée par les skills et les messages existe dans les
+sessions des agents (`-EnvironmentScope None` l'en empêche ; la désinstallation
+retire cette seule entrée). Les commandes ci-dessous donnent quand même le
+chemin complet du lanceur, valable avant le redémarrage du terminal.
+
+**Dans l'app Copilot, chaque session tourne dans une copie de travail**
+(un worktree rangé sous `~\.copilot\repos\copilot-worktrees\`), pas dans le
+dossier du projet. Le briefing le signale. Ce que l'agent y écrit n'arrive dans
+le projet qu'une fois commité puis fusionné, et les dossiers voisins de cette
+copie ne sont pas l'atelier : c'est pourquoi le rôle du CTO porte le chemin
+absolu de l'atelier.
 
 ## Adopter un projet existant
 

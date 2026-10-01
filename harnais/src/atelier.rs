@@ -141,7 +141,13 @@ harnais. À blanc par défaut ; `--go` écrit. Rien n'est jamais écrasé.");
     if cto.join("CLAUDE.md").exists() {
         ignores.push(format!("{} existe : ne pas créer AGENTS.md en doublon", cto.join("CLAUDE.md").display()));
     } else {
-        if let Err(e) = pose(&CTO.replace("[UTILISATEUR]", &qui), &cto.join("AGENTS.md"), go, &mut faits, &mut ignores) {
+        let racine_abs = std::path::absolute(&racine).unwrap_or_else(|_| racine.clone());
+        let paquet = crate::copilot::paquet().map(|p| p.display().to_string())
+            .unwrap_or_else(|_| "introuvable — `harnais diagnostic` le cherche".into());
+        let role = CTO.replace("[UTILISATEUR]", &qui)
+            .replace("[RACINE]", &racine_abs.display().to_string())
+            .replace("[PAQUET]", &paquet);
+        if let Err(e) = pose(&role, &cto.join("AGENTS.md"), go, &mut faits, &mut ignores) {
             eprintln!("atelier-monte : {e}"); return 1;
         }
     }
@@ -247,6 +253,10 @@ mod essais {
         assert_eq!(socle, SOCLE.replace("[UTILISATEUR]", "alice"));
         assert!(socle.contains("`@user` désigne alice"), "la méthode nomme @user");
         assert!(role.contains("alice") && !role.contains("[UTILISATEUR]"));
+        // LE RÔLE DIT OÙ SONT LES CHOSES : la racine en absolu, le paquet, et
+        // aucun gabarit laissé brut.
+        assert!(role.contains(&format!("Racine de l'atelier : `{}`", d.display())), "{role}");
+        assert!(!role.contains("[RACINE]") && !role.contains("[PAQUET]"));
         assert!(d.join("cto/brain/fact/base.md").is_file(), "le harnais est posé par adopte");
         assert!(d.join("cto/.git").exists(), "et son dépôt");
         // relancer ne change rien

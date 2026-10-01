@@ -374,6 +374,37 @@ brain/, que rien ne confronte aux faits du projet.\n         La couper : `/memor
 \"memory\": false dans {}).", reglages.display()))
 }
 
+/// UNE COPIE DE TRAVAIL DE SESSION N'EST PAS LE PROJET. L'app Copilot ouvre
+/// chaque session dans un worktree rangé hors de l'atelier : ses dossiers
+/// voisins ne sont pas les projets, et ce qui y est écrit n'existe nulle part
+/// ailleurs tant que ce n'est pas commité puis fusionné. Un dépôt ordinaire,
+/// ou un sous-module, a le même dossier git que son dossier commun : rien à dire.
+fn copie_de_session(r: &Path) -> Option<String> {
+    let git = |a: &[&str]| Command::new("git").args(a).current_dir(r).output().ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+    let dir = git(&["rev-parse", "--path-format=absolute", "--git-dir"])?;
+    let commun = git(&["rev-parse", "--path-format=absolute", "--git-common-dir"])?;
+    if dir == commun { return None; }
+    let principal = Path::new(&commun).parent()?.display().to_string();
+    let principal = if cfg!(windows) { principal.replace('/', "\\") } else { principal };
+    let branche = git(&["branch", "--show-current"]).filter(|b| !b.is_empty())
+        .unwrap_or_else(|| "détachée".into());
+    Some(format!("lieu   : copie de travail de session, branche `{branche}` — le dépôt principal est \
+{principal}.\n         Ce que tu écris ici n'existe pas ailleurs tant que ce n'est pas commité puis \
+fusionné ; les dossiers voisins ne sont pas l'atelier."))
+}
+
+/// LA COMMANDE QUE LES FICHES CITENT. Si le PATH de la session ne trouve pas
+/// `harnais`, son chemin complet — sans lui, l'agent improvise un remplaçant.
+fn commande_harnais(path: &std::ffi::OsStr, paquet: Option<PathBuf>) -> Option<String> {
+    let noms: &[&str] = if cfg!(windows) { &["harnais.cmd", "harnais.exe", "harnais.bat"] } else { &["harnais"] };
+    if std::env::split_paths(path).any(|d| noms.iter().any(|n| d.join(n).is_file())) { return None; }
+    let lanceur = paquet?.join("bin").join(if cfg!(windows) { "harnais.cmd" } else { "harnais" });
+    Some(format!("commande: `harnais` n'est pas dans le PATH de cette session — tape `{}` à sa place.",
+                 lanceur.display()))
+}
+
 /// Une section de fait qui porte sa ligne d'établissement.
 pub struct Etablissement {
     pub titre: String,
@@ -612,6 +643,9 @@ pub fn compose(r: &Path, projet: Option<&Path>, session: &str) -> String {
     if let Some(m) = memoire_copilot(&crate::hote::maison_copilot().join("settings.json")) {
         l.extend(m.split('\n').map(String::from));
     }
+    if let Some(m) = copie_de_session(r) { l.extend(m.split('\n').map(String::from)); }
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    if let Some(m) = commande_harnais(&path, crate::copilot::paquet().ok()) { l.push(m); }
 
     let lignes = equipe(r, projet, session);
     if !lignes.is_empty() {
@@ -1055,6 +1089,47 @@ mod essais {
         assert_eq!((nat, orig), (crate::nature::Nature::Croyance, crate::nature::Origine::Supposition));
         // Sans mot après la date, rien n'est déclaré : la ligne habituelle.
         assert_eq!(etablissements("## Y\n> **mesuré** · 01/09/2026 — lsof\n")[0].nature, None);
+    }
+
+    #[test]
+    fn une_copie_de_session_se_dit_et_le_depot_principal_se_tait() {
+        let b = std::env::temp_dir().join(format!("harnais-copie-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&b);
+        let d = b.join("principal");
+        std::fs::create_dir_all(&d).unwrap();
+        let g = |dir: &Path, a: &[&str]| assert!(Command::new("git")
+            .args(["-c", "user.name=t", "-c", "user.email=t@t"]).args(a).current_dir(dir)
+            .output().unwrap().status.success(), "{a:?}");
+        g(&d, &["init", "-q", "-b", "main"]);
+        std::fs::write(d.join("x"), "x").unwrap();
+        g(&d, &["add", "-A"]); g(&d, &["commit", "-qm", "x"]);
+        let copie = b.join("copies").join("session-1");
+        g(&d, &["worktree", "add", "-q", "-b", "session-1", copie.to_str().unwrap()]);
+        let l = copie_de_session(&copie).expect("une copie de session doit se dire");
+        assert!(l.contains("branche `session-1`") && l.contains("principal"), "{l}");
+        // TÉMOIN : le dépôt principal lui-même ne dit rien.
+        assert_eq!(copie_de_session(&d), None);
+        let _ = std::fs::remove_dir_all(&b);
+    }
+
+    #[test]
+    fn la_commande_harnais_donne_son_chemin_quand_le_path_ne_la_trouve_pas() {
+        let b = std::env::temp_dir().join(format!("harnais-path-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&b);
+        let bin = b.join("paquet").join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        let lanceur = bin.join(if cfg!(windows) { "harnais.cmd" } else { "harnais" });
+        std::fs::write(&lanceur, "x").unwrap();
+        let vide = b.join("ailleurs");
+        std::fs::create_dir_all(&vide).unwrap();
+        let sans = std::env::join_paths([&vide]).unwrap();
+        let l = commande_harnais(&sans, Some(b.join("paquet"))).expect("absente du PATH : le dire");
+        assert!(l.contains(&lanceur.display().to_string()), "{l}");
+        // TÉMOINS : trouvée dans le PATH, ou paquet inconnu, rien à dire.
+        let avec = std::env::join_paths([&vide, &bin]).unwrap();
+        assert_eq!(commande_harnais(&avec, Some(b.join("paquet"))), None);
+        assert_eq!(commande_harnais(&sans, None), None);
+        let _ = std::fs::remove_dir_all(&b);
     }
 
     #[test]
