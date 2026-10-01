@@ -132,8 +132,9 @@ taxonomie ancienne, il ne la migre pas : trier demande de lire le contenu, et le
 contenu appartient au projet.
 
 Puis vérifier, dans cet ordre : le dépôt est un dépôt git · le paquet est
-déclaré **et inscrit** dans chaque dossier de lancement · **il sert vraiment**,
-ce qui se voit au briefing d'entrée. Relancer `harnais equipe-vue --projet
+déclaré **et inscrit** à la racine git · en équipe, chaque agent a son profil
+`.github/agents/<nom>.agent.md` commité · **il sert vraiment**, ce qui se voit
+au briefing d'entrée (ligne `agent` en équipe). Relancer `harnais equipe-vue --projet
 <nom>` doit alors rendre `OK`.
 
 ## Le contrat de lecture

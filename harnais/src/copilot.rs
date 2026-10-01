@@ -104,14 +104,75 @@ pub fn avertit_ancien(d: &Path) {
     }
 }
 
+/// LE PÉRIMÈTRE D'UN AGENT, rattaché à la copie de travail COURANTE.
+///
+/// `deny` liste des dossiers. Écrits RELATIFS (`agents/PO`), ils se lisent depuis
+/// la racine de la copie où l'on travaille — c'est ce qu'écrit `harnais equipe`.
+/// Écrits ABSOLUS, comme il le faisait jusqu'en 0.15.0, ils visent le dossier
+/// PRINCIPAL du dépôt : dans une copie de l'app, aucune écriture n'y tombe, et
+/// la garde laissait tout passer sans le dire. Un absolu sous le principal est
+/// donc transposé sur la copie ; un absolu hors du dépôt reste tel quel.
 pub fn perimetre(d: &Path) -> Result<Vec<PathBuf>, String> {
+    let copie = racine_git(d).ok();
+    let principal = crate::memoire::racine_depot(d);
+    Ok(lis_deny(d)?.iter().map(|x| ancre(x, copie.as_deref(), principal.as_deref())).collect())
+}
+
+/// Les entrées de `deny` TELLES QU'ÉCRITES — pour les réécrire, pas pour garder.
+pub fn lis_deny(d: &Path) -> Result<Vec<PathBuf>, String> {
     let p = d.join(".github/copilot/perimetre.json");
     if !p.is_file() { return Ok(Vec::new()); }
     let v: Value = serde_json::from_str(&std::fs::read_to_string(&p).map_err(|e| e.to_string())?)
         .map_err(|e| format!("{} : {e}", p.display()))?;
     let deny = v.get("deny").and_then(Value::as_array).ok_or_else(|| format!("{} : deny doit être une liste", p.display()))?;
-    deny.iter().map(|v| v.as_str().map(PathBuf::from).ok_or_else(|| "deny doit contenir des chemins absolus".into()))
+    deny.iter()
+        .map(|v| v.as_str().map(PathBuf::from).ok_or_else(|| format!("{} : deny doit contenir des chemins", p.display())))
         .collect()
+}
+
+/// CE QUE LA GARDE REFUSE : le périmètre posé sur la copie courante, ET le même
+/// dans le dossier principal quand on travaille dans une copie — une écriture
+/// d'une copie vers le principal sort aussi du lot.
+fn perimetre_garde(d: &Path) -> Result<Vec<PathBuf>, String> {
+    let mut v = perimetre(d)?;
+    let principal = crate::memoire::racine_depot(d);
+    for x in lis_deny(d)? {
+        let p = ancre(&x, principal.as_deref(), principal.as_deref());
+        if !v.contains(&p) { v.push(p); }
+    }
+    Ok(v)
+}
+
+/// Un dossier interdit, posé sur la copie courante. Composé COMPOSANT PAR
+/// COMPOSANT : sous Windows la copie est un chemin `\\?\`, où une barre
+/// oblique ne sépare plus rien.
+fn ancre(p: &Path, copie: Option<&Path>, principal: Option<&Path>) -> PathBuf {
+    let Some(copie) = copie else { return p.to_path_buf() };
+    let pose = |reste: &Path| {
+        let mut out = copie.to_path_buf();
+        for c in reste.components() { out.push(c); }
+        out
+    };
+    if p.is_relative() { return pose(p); }
+    if let Some(m) = principal {
+        if let Some(reste) = sous(&canonique(p), &canonique(m)) { return pose(&reste); }
+    }
+    p.to_path_buf()
+}
+
+/// Le reste de `p` sous `base`, ou `None`. Sans égard à la casse sous Windows.
+fn sous(p: &Path, base: &Path) -> Option<PathBuf> {
+    if let Ok(r) = p.strip_prefix(base) { return Some(r.to_path_buf()); }
+    #[cfg(windows)]
+    {
+        let (pl, bl) = (p.to_string_lossy().to_lowercase(), base.to_string_lossy().to_lowercase());
+        let bl = bl.trim_end_matches('\\').to_string();
+        if pl == bl { return Some(PathBuf::new()); }
+        if pl.starts_with(&(bl.clone() + "\\")) {
+            return Some(PathBuf::from(&p.to_string_lossy()[bl.len() + 1..]));
+        }
+    }
+    None
 }
 
 fn canonique(p: &Path) -> PathBuf {
@@ -141,7 +202,7 @@ fn dedans(path: &Path, interdit: &Path) -> bool {
 pub fn decision(charge: &Value, lancement: &Path) -> Result<Option<String>, String> {
     let nom = charge.get("tool_name").or_else(|| charge.get("toolName")).and_then(Value::as_str).unwrap_or("");
     if !["Edit", "Write", "edit", "create", "apply_patch", "str_replace_editor"].contains(&nom) { return Ok(None); }
-    let denies = perimetre(lancement)?;
+    let denies = perimetre_garde(lancement)?;
     if denies.is_empty() { return Ok(None); }
     let args = charge.get("tool_input").or_else(|| charge.get("toolArgs"));
     let args_texte: Value = match args {
@@ -154,6 +215,11 @@ pub fn decision(charge: &Value, lancement: &Path) -> Result<Option<String>, Stri
     let depot = racine_git(lancement)?;
     let agent = lancement.canonicalize().unwrap_or_else(|_| lancement.to_path_buf());
     if !agent.starts_with(&depot) { return Err("dossier de lancement hors du dépôt Git".into()); }
+    // UN CHEMIN RELATIF SE LIT DEPUIS LE DOSSIER DE LA SESSION, pas depuis le
+    // dossier de l'agent : dans l'app, la session tourne à la racine de la
+    // copie, et le harnais s'est placé dans `agents/<nom>/` (voir `agent`).
+    let base = charge.get("cwd").and_then(Value::as_str).map(PathBuf::from)
+        .filter(|p| p.is_absolute()).unwrap_or_else(|| lancement.to_path_buf());
     let mut chemins: Vec<&str> = ["file_path", "path", "filePath"]
         .iter().filter_map(|k| args_texte.get(*k).and_then(Value::as_str)).collect();
     if let Some(patch) = args_texte.get("patch").and_then(Value::as_str) {
@@ -167,7 +233,7 @@ pub fn decision(charge: &Value, lancement: &Path) -> Result<Option<String>, Stri
     if chemins.is_empty() { return Err("outil d'écriture sans chemin vérifiable".into()); }
     for chemin in chemins {
         let chemin = Path::new(chemin);
-        let chemin = if chemin.is_absolute() { chemin.to_path_buf() } else { lancement.join(chemin) };
+        let chemin = if chemin.is_absolute() { chemin.to_path_buf() } else { base.join(chemin) };
         for interdit in &denies {
             if dedans(&chemin, interdit) {
                 return Ok(Some(format!("Écriture refusée hors périmètre : {} (dossier interdit : {})", chemin.display(), interdit.display())));
@@ -222,6 +288,45 @@ mod essais {
         std::fs::remove_dir_all(&d).unwrap();
         assert!(decision(&dehors, &moi).unwrap().is_none(), "sans périmètre : fail-open");
         assert!(decision(&raw, &moi).unwrap().is_none(), "FREEFORM sans périmètre");
+    }
+
+    /// LA COPIE DE L'APP : périmètre écrit à l'ancienne (absolu, dossier
+    /// principal) et à la nouvelle (relatif), session à la racine de la copie,
+    /// harnais placé dans `agents/OPS`. Sans transposition, la garde laissait
+    /// tout passer — mesuré sur un vrai projet.
+    #[test]
+    fn dans_une_copie_la_garde_vise_la_copie_et_le_principal() {
+        let g = |d: &Path, a: &[&str]| assert!(std::process::Command::new("git").args(a).current_dir(d)
+            .env("GIT_AUTHOR_NAME", "t").env("GIT_AUTHOR_EMAIL", "t@t")
+            .env("GIT_COMMITTER_NAME", "t").env("GIT_COMMITTER_EMAIL", "t@t")
+            .status().unwrap().success(), "git {:?}", a);
+        let d = std::env::temp_dir().join(format!("perimetre-copie-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        for a in ["OPS/.github/copilot", "PO", "QA"] { std::fs::create_dir_all(d.join("agents").join(a)).unwrap(); }
+        g(&d, &["init", "-q"]);
+        let d = d.canonicalize().unwrap();
+        std::fs::write(d.join("agents/OPS/.github/copilot/perimetre.json"),
+                       json!({"deny": [d.join("agents/PO"), "agents/QA"]}).to_string()).unwrap();
+        for a in ["PO", "QA"] { std::fs::write(d.join("agents").join(a).join("x.md"), "x").unwrap(); }
+        g(&d, &["add", "-A"]);
+        g(&d, &["commit", "-q", "-m", "p"]);
+        let w = d.with_file_name(format!("perimetre-copie-w-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&w);
+        g(&d, &["worktree", "add", "-q", "-b", "session", w.to_str().unwrap()]);
+        let w = w.canonicalize().unwrap();
+        let moi = w.join("agents/OPS");
+        let ecrit = |f: Value| decision(&json!({"tool_name": "Write", "tool_input": {"file_path": f}, "cwd": w}), &moi);
+
+        assert!(ecrit(json!(w.join("agents/PO/a.md"))).unwrap().is_some(), "absolu du principal, transposé");
+        assert!(ecrit(json!(w.join("agents/QA/a.md"))).unwrap().is_some(), "relatif, posé sur la copie");
+        assert!(ecrit(json!("agents/PO/b.md")).unwrap().is_some(), "chemin relatif lu depuis la session");
+        assert!(ecrit(json!(d.join("agents/QA/c.md"))).unwrap().is_some(), "de la copie vers le principal");
+        assert!(ecrit(json!(w.join("agents/OPS/d.md"))).unwrap().is_none(), "son propre lot");
+        assert!(ecrit(json!("agents/OPS/e.md")).unwrap().is_none());
+        // Ce que le briefing affiche : la copie, jamais le principal.
+        assert_eq!(perimetre(&moi).unwrap(), vec![w.join("agents/PO"), w.join("agents/QA")]);
+        g(&d, &["worktree", "remove", "--force", w.to_str().unwrap()]);
+        std::fs::remove_dir_all(&d).unwrap();
     }
 
     #[test]

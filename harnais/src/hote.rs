@@ -66,7 +66,25 @@ static TRANSFORME: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 
 /// À appeler UNE fois, avant tout, par chaque sous-commande de hook : les
 /// variables du paquet et du projet posées, et la charge normalisée.
-pub fn prepare(entree: &str) -> String {
+pub fn prepare(entree: &str) -> String { prepare_avec(entree, true) }
+
+/// La même, SANS lire le journal de session : pour un hook qui n'a pas besoin
+/// de savoir quel agent parle (les lectures de faits, communes à tous) et qui
+/// part à chaque lecture — le journal se lit en entier.
+pub fn prepare_sans_agent(entree: &str) -> String { prepare_avec(entree, false) }
+
+/// Pour les deux hooks shell, qui partent à CHAQUE commande et n'agissent que
+/// sur un `git commit` : l'agent n'est résolu que pour un commit.
+pub fn prepare_si_commit(entree: &str) -> String {
+    let t = prepare_avec(entree, false);
+    if let Ok(v) = serde_json::from_str::<Value>(&t) {
+        let cmd = v.get("tool_input").and_then(|o| o.get("command")).and_then(|c| c.as_str()).unwrap_or("");
+        if crate::journal::est_un_commit(cmd) { crate::agent::pose(&v); }
+    }
+    t
+}
+
+fn prepare_avec(entree: &str, agent: bool) -> String {
     pose_variables_du_paquet();
     let v: Value = match serde_json::from_str(entree) { Ok(v) => v, Err(_) => return entree.to_string() };
     let v = traduis(v);
@@ -75,6 +93,9 @@ pub fn prepare(entree: &str) -> String {
             std::env::set_var("COPILOT_PROJECT_DIR", c);
         }
     }
+    // QUI PARLE — lu dans le journal de session, puisqu'aucun hook ne le reçoit.
+    // Peut déplacer `COPILOT_PROJECT_DIR` dans le dossier de l'agent : voir `agent`.
+    if agent { crate::agent::pose(&v); }
     if let Some(t) = v.get("transformedPrompt").and_then(|x| x.as_str()) {
         let _ = TRANSFORME.set(t.to_string());
     }

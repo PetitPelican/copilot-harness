@@ -211,38 +211,65 @@ projet/                           projet/
     mind/   state · todo              mind/<nom>/ state · todo           ← un jeu par agent
   docs/     les traces                workspace/  le carnet d'équipe
   .logs/    le journal              docs/ · .logs/                       ← partagés
-  .github/copilot/settings.json       agents/
-  src/ …                                ops/ AGENTS.md · .github/copilot/perimetre.json
-  po/  AGENTS.md · .github/copilot/perimetre.json
+  .github/copilot/settings.json     .github/
+  src/ …                              copilot/settings.json              ← le paquet, une fois
+                                      agents/<nom>.agent.md              ← le menu d'agent
+                                    agents/
+                                      ops/ AGENTS.md · .github/copilot/perimetre.json
+                                      po/  AGENTS.md · .github/copilot/perimetre.json
                                     src/ …
 ```
 
-**Trois éléments par agent** : son `AGENTS.md` de rôle et son
-`.github/copilot/perimetre.json` dans `agents/<nom>/`, puis son état dans
-`brain/mind/<nom>/`. Le rôle du projet est lu depuis le dossier intermédiaire
-entre la racine git et le `cwd`, en plus de celui de l'agent. `brain/fact/`,
+**Quatre éléments par agent** : son profil `.github/agents/<nom>.agent.md` à
+la racine git, son `AGENTS.md` de rôle et son `.github/copilot/perimetre.json`
+dans `agents/<nom>/`, son état dans `brain/mind/<nom>/`. `brain/fact/`,
 `docs/`, `.logs/` et le code n'appartiennent à aucun agent.
 
 `brain/fact/roles.md` rend visibles à tous les périmètres et zones partagées.
 Le rôle propre d'un agent reste dans SON `AGENTS.md`.
 
+**Qui parle : l'agent choisi, pas le dossier.** L'app Copilot lance chaque
+conversation à la racine d'une copie de travail ; l'agent se choisit dans le
+menu d'agent du champ de saisie, qui liste les profils `.github/agents/`.
+Aucun hook ne reçoit ce choix : le harnais le lit dans le journal de la
+session (`subagent.selected`, `subagent.deselected`) et se place dans
+`agents/<nom>/`, comme si la session y avait été lancée. Le briefing dit
+l'agent et d'où il vient, et MONTRE son rôle, son état et son périmètre ; la
+garde d'écriture, le garde de commit, le journal et la fin de tour suivent le
+même agent. La règle, dans cet ordre :
+
+1. l'agent choisi dans le menu (ou `copilot --agent <nom>` dans le CLI) ;
+2. sinon le dossier de lancement, quand la session est ouverte dans `agents/<nom>/` ;
+3. sinon **QA**, s'il existe : « Default agent » prend QA ;
+4. sinon aucun agent — le briefing le dit, et rien n'est gardé.
+
+Un agent choisi qui n'est pas un agent du projet ne prend pas QA. Changer
+d'agent dans le menu ou compacter la conversation refait partir le briefing.
+**Une conversation, un agent** : le choisir avant le premier message. Le
+profil doit être **commité** — une conversation part de l'état commité.
+
 **Attention : réglages non hérités, mais PAS locaux au `cwd`.** Copilot cherche
 `.github/copilot/settings.json` à la **racine du dépôt git**. Dans un dépôt
 commun, d'anciens fichiers `agents/<nom>/.github/copilot/settings.json`
 ne sont pas chargés par Copilot ; leurs
-`enabledPlugins` n'activent donc pas chacun le paquet et ses hooks. Un réglage
-à la racine peut l'activer pour tout le dépôt, sans isolation par agent.
-**Cette forme ne réalise pas seule l'isolation multi-agents.** Vérifier le
-briefing et la garde `preToolUse` dans chaque session ; ne pas qualifier les
-réglages d'agent de « servis » sans cette preuve.
+`enabledPlugins` n'activent donc pas chacun le paquet et ses hooks. Le paquet
+s'active une fois, à la racine, pour tous les agents : la séparation entre
+agents vient du choix d'agent et de la garde du harnais, pas des réglages.
+Vérifier dans chaque session la ligne `agent` du briefing, puis un refus de la
+garde par un essai négatif ; ne pas qualifier un agent de « gardé » sans cette
+preuve.
 
 Copilot ignore les `permissions.deny` ordinaires hors réglages managés : le
 périmètre effectif vient de la garde `PreToolUse` du harnais, qui refuse
 `Edit|Write` (`edit/create`) hors des chemins autorisés, avec
 `permissionDecision: "deny"` et sa raison. Sa source de vérité est le fichier
 de périmètre posé par `harnais equipe` dans le dossier d'agent ; le briefing
-montre ce qu'applique la garde. Absence de fichier : fail-open. Les chemins
-sont ancrés sur le dossier de lancement de l'agent. Une commande shell qui écrit des fichiers n'est pas
+montre ce qu'applique la garde. Absence de fichier : fail-open. Les chemins du
+périmètre sont **relatifs à la racine du projet** et se posent sur la copie de
+travail courante ; un chemin absolu vers le dossier principal (périmètres
+écrits avant 0.16.0) est transposé sur la copie, et le dossier principal reste
+interdit depuis la copie. Un chemin relatif passé à un outil se lit depuis le
+dossier de la session. Une commande shell qui écrit des fichiers n'est pas
 couverte par le seul matcher `Edit|Write` : cette limite doit être vérifiée
 séparément, pas présentée comme un confinement général.
 
@@ -252,11 +279,13 @@ au-dessus. Le fichier du haut est chargé à chaque démarrage de chaque agent �
 une phrase répétée est payée deux fois par session.
 
 **Deux agents ne portent jamais des noms qui se slugifient pareil** : leurs
-fichiers d'état et leurs dossiers d'agent doivent rester distincts.
+fichiers d'état, leurs dossiers d'agent et leurs profils doivent rester
+distincts.
 
-Conversion et ajout d'agent : `/agentic-agents`. Pas de migration de mémoire
-auto fichier sous Copilot ; pour l'historique des sessions, effet d'un changement
-de `cwd` **non mesuré**.
+Conversion et ajout d'agent : `/agentic-agents`. Un projet passé en équipe
+avant 0.16.0 n'a pas de profils : `harnais equipe --profils --apply`, puis
+commiter. Pas de migration de mémoire auto fichier sous Copilot ; pour
+l'historique des sessions, effet d'un changement de `cwd` **non mesuré**.
 
 ## Les déclencheurs du paquet
 
@@ -270,7 +299,8 @@ protection.
 - **`briefing`** (`sessionStart` + `userPromptTransformed`) — injecte à l'ouverture
   ce qui ne tient pas dans un pointeur : le `cap:`, la fraîcheur, le nombre de
   décisions en attente, les **titres de section** des faits, et les périmètres
-  réellement appliqués. Une empreinte des contenus évite de répéter le même
+  réellement appliqués. En équipe, il nomme l'agent actif et d'où il le tient
+  (menu, dossier, défaut) et, quand Copilot ne l'a pas chargé, montre son rôle. Une empreinte des contenus évite de répéter le même
   briefing dans une session identifiée ; un changement le rafraîchit au prompt
   suivant. Sans identifiant de session, la déduplication n'est pas garantie.
   Chaque worktree Copilot lit son propre `brain/`, jamais celui du checkout

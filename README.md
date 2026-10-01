@@ -131,6 +131,16 @@ le projet qu'une fois commité puis fusionné, et les dossiers voisins de cette
 copie ne sont pas l'atelier : c'est pourquoi le rôle du CTO porte le chemin
 absolu de l'atelier.
 
+**Un projet à plusieurs agents : on choisit l'agent dans le menu.** La session
+démarre à la racine de la copie, jamais dans `agents\OPS` : on choisit l'agent
+dans le menu d'agent du champ de saisie (`ops`, `po`, `qa`…), avant le premier
+message. Le harnais lit ce choix dans le journal de la session, sert le rôle,
+l'état et le périmètre de l'agent, et l'annonce en tête du briefing
+(`agent : OPS — choisi dans le menu…`). « Default agent » prend QA quand le
+projet en a un. Les profils `.github\agents\<nom>.agent.md` sont posés par
+`harnais equipe` et doivent être commités ; pour un projet passé en équipe
+avant 0.16.0 : `harnais equipe --profils --apply`, puis commiter.
+
 ## Adopter un projet existant
 
 Le projet agentique se tient dans l'atelier : un dossier sous sa racine, avec
@@ -191,7 +201,9 @@ La mémoire Copilot est lue dans le **checkout courant**, y compris
 en worktree ; elle ne se replie pas sur celle du checkout principal.
 Les fichiers doivent donc être commités avant de créer une autre session.
 Dans un dépôt multi-agents, les réglages du plugin restent à la racine Git,
-pas dans chaque dossier d'agent.
+pas dans chaque dossier d'agent. `harnais agent --session <id> --racine <copie>`
+dit, en lecture seule, quel agent les hooks de cette session ont reconnu et
+pourquoi.
 
 ## Mise à jour et désinstallation
 

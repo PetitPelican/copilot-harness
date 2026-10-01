@@ -5,8 +5,9 @@ description: >
   qui l'est déjà. Marche sur les DEUX organisations de mémoire : `brain/` (l'esprit
   de chaque agent va dans `brain/mind/<nom>/`) et l'ancienne (`agents/<nom>/.mind/`).
   Saute la migration de mémoire auto fichier sous Copilot, déclare le
-  PAQUET dans chaque agent, amorce le carnet d'équipe et pose les périmètres
-  contrôlés par la garde `PreToolUse`. Ne découpe PAS le fichier AGENTS.md : c'est éditorial. Refuse un projet sans
+  PAQUET à la racine git, écrit le profil de chaque agent pour le menu d'agent
+  de l'app, amorce le carnet d'équipe et pose les périmètres contrôlés par la
+  garde `PreToolUse`. `--profils` met à niveau un projet déjà en équipe. Ne découpe PAS le fichier AGENTS.md : c'est éditorial. Refuse un projet sans
   aucune maison de faits. Dry-run par défaut.
   Trigger: /agentic-agents, « passer ce projet en multi-agents », « ajouter un
   agent », « découper ce projet en lots », « ce projet a besoin de deux agents ».
@@ -37,9 +38,12 @@ sont la même opération à une étape près.
 | `agentic-team` | la **vue** de l'atelier — lecture seule, ne modifie rien |
 | **`agentic-agents`** | la **forme** du projet — combien d'agents y travaillent |
 
-`agents/` héberge les dossiers de lancement et leurs `AGENTS.md` ;
-`.github/agents/` définit des sous-agents Copilot `<nom>.agent.md` avec
-`model:` et `include-custom-instructions: true`. Ne pas les confondre.
+`agents/<nom>/` porte le RÔLE de l'agent (`AGENTS.md`) et son périmètre ;
+`.github/agents/<nom>.agent.md` est son PROFIL, ce qui le fait apparaître dans
+le menu d'agent de l'app. Le profil reste court et ne recopie pas le rôle : le
+harnais lit le choix dans le journal de session et sert lui-même le rôle,
+l'état et le périmètre. Les deux portent le même nom, slugifié en minuscules
+(`OPS` → `ops`, `Projet QA` → `projet-qa`).
 
 ## Quand un projet mérite plusieurs agents
 
@@ -65,7 +69,8 @@ seul tenant se tient très bien à un agent, et la forme mono coûte moins cher.
 ```
 brain/mind/{state,todo}.md  ->  brain/mind/<premier>/       l'agent qui était là garde sa mémoire
 .github/copilot/settings.json reste à la racine git (activation unique)
-agents/<nom>/.github/copilot/perimetre.json porte la garde d'écriture
+.github/agents/<nom>.agent.md  le profil du menu d'agent — jamais écrasé
+agents/<nom>/.github/copilot/perimetre.json porte la garde d'écriture, en chemins relatifs
 pas de mémoire auto fichier Copilot à migrer
 agents/<autres>/            ->  créés, avec rôle et réglages ; leur état neuf dans brain/mind/<nom>/
 brain/fact/roles.md         ->  qui tient quoi, et les zones partagées
@@ -98,12 +103,25 @@ donnerait un dispositif qui a l'air monté sans que personne l'ait décidé.
 Les faits, `docs/`, `.logs/`, le code : **rien ne bouge** — seul `roles.md`
 s'ajoute aux faits. Aucun n'appartient à un agent.
 
+**Qui parle.** L'app Copilot lance chaque conversation à la racine d'une
+copie de travail : le dossier ne dit plus qui parle. L'agent se choisit dans
+le menu d'agent du champ de saisie ; le harnais lit ce choix dans le journal
+de session et se place dans `agents/<nom>/`. Règle : le menu, sinon le dossier
+de lancement (CLI), sinon QA s'il existe (« Default agent » prend QA), sinon
+aucun agent — le briefing le dit. Une conversation, un agent : le choisir
+avant le premier message.
+
 **Limite de la forme multi-agents :** Copilot ne lit `.github/copilot/settings.json`
-qu'à la racine du dépôt git. Les fichiers placés dans `agents/<nom>/`
-n'activent ni le paquet ni ses hooks dans un dépôt commun. Supprimer les
-réglages de la racine peut donc désactiver le paquet. Une activation à la
-racine vaut pour tous les agents, pas séparément. Vérifier chaque briefing
-et chaque garde, ne pas annoncer l'isolation comme acquise.
+qu'à la racine du dépôt git. Le paquet s'y active une fois pour tous les
+agents ; la séparation entre agents vient du choix d'agent et de la garde, pas
+des réglages. Vérifier dans chaque session la ligne `agent` du briefing et un
+refus de la garde, ne pas annoncer l'isolation comme acquise.
+
+**Un agent du projet appelé comme sous-agent** (outil task, ou délégation
+décidée par le modèle) n'est pas suivi : ses écritures sont jugées sous le
+périmètre de l'agent de la conversation. Le profil n'interdit pas cette
+délégation ; `disable-model-invocation: true` le ferait d'après la
+documentation de Copilot, **non mesuré** sur le menu de l'app.
 
 ## Le piège qu'il existe pour éviter
 
@@ -132,25 +150,33 @@ harnais equipe --project-root . --agents "OPS,PO"
 
 # 3. appliquer
 harnais equipe --project-root . --agents "OPS,PO" --apply
+
+# un projet passé en équipe avant 0.16.0 : profils manquants, périmètres relatifs
+harnais equipe --project-root . --profils --apply
 ```
+
+Puis **commiter** : une nouvelle conversation de l'app part de l'état commité,
+un profil non commité n'apparaît pas dans le menu.
 
 Le programme est celui du paquet, le même sur Mac et sur Windows — le
 briefing d'un projet en donne le chemin exact. C'est un programme natif : il ne
 dépend d'aucun interpréteur installé sur la machine.
 
-## Les trois choses qui restent à la main
+## Ce qui reste à la main
 
 1. **Découper le `AGENTS.md`** : le commun reste à la racine git, le rôle
    descend dans `agents/<nom>/AGENTS.md`. Si `CLAUDE.md` existe, le signaler
    plutôt que laisser deux instructions contradictoires : Copilot lit les deux.
 2. **Déclarer les périmètres dans la source de vérité du harnais** posée
    par `equipe`, non dans `permissions.deny` (ignoré hors réglages managés).
-   La garde `PreToolUse` refuse `Edit|Write` (`edit/create`) hors des chemins
-   ancrés sur le home (`permissionDecision: deny` et raison). Sans fichier,
-   fail-open. Les écritures par shell ne sont pas couvertes par ce matcher.
+   La garde `PreToolUse` refuse `Edit|Write` (`edit/create`) dans les
+   dossiers interdits à l'agent actif (`permissionDecision: deny` et raison),
+   en chemins relatifs à la racine du projet, posés sur la copie de travail
+   courante. Sans fichier, fail-open. Les écritures par shell ne sont pas
+   couvertes par ce matcher.
 3. **Résoudre le paquet** : `copilot plugin marketplace add <chemin-local>`
    puis `copilot plugin install harnais@atelier-copilot`. Les fichiers
    des dossiers d'agent ne suffisent pas ; tester briefing et garde de chacun.
-4. **Relancer les sessions Copilot dans les dossiers d'agents**, sous des noms
-   slugifiés. L'ancienne session à la racine n'a plus d'agent — le briefing
-   l'avertira au lieu de se taire, mais elle ne sert plus à rien.
+4. **Commiter, puis choisir l'agent dans le menu d'agent de l'app** (`ops`,
+   `po`, `qa`…) — dans le CLI, `copilot --agent <nom>` ou une session lancée
+   dans `agents/<nom>/`. Vérifier la ligne `agent` du premier briefing.

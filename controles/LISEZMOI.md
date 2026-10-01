@@ -24,7 +24,9 @@ python .\scripts\package_release.py --target x86_64-pc-windows-gnu
   puis rendu.
 - **`portable-smoke.ps1`** joue les charges de hooks contre le binaire : atelier,
   accueil du CTO puis sa fermeture après déclaration, adoption partielle,
-  idempotence, briefing, worktree, tableau de bord, gardes et journal.
+  idempotence, briefing, worktree, tableau de bord, gardes et journal, puis le
+  choix d'agent de l'app : profils posés par `equipe`, agent lu dans un
+  journal de session, garde de la copie, « Default agent » qui prend QA.
   `-Executable` désigne un autre binaire que celui de `bin/`.
 
 ## Avec un CLI Copilot authentifié

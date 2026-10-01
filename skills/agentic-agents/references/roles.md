@@ -258,7 +258,9 @@ trois lots paie tout le coût sans aucun bénéfice.
 
 - **un répertoire de travail par agent** dès qu'ils commitent — et un worktree
   naît **sans aucun fichier ignoré** (`.env`, configuration locale, permissions
-  accumulées). Les vérifications habituelles passent au vert sans les voir ;
+  accumulées). Les vérifications habituelles passent au vert sans les voir.
+  L'app Copilot en donne un à chaque conversation : le coût se déplace vers la
+  **fusion**, seul chemin par lequel le travail d'un agent atteint les autres ;
 - **un fichier de harnais à propager à N endroits** au lieu d'un ; un fichier
   posé sans être commité fait échouer une fusion ultérieure ;
 - **des mesures qui se trompent d'arbre**, avec assurance ;

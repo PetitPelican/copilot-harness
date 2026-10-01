@@ -11,8 +11,12 @@
 //!     à l'ancienne     .mind/                     -> agents/<premier>/.mind/
 //!                      .fact/roles.md, carnet dans equipe/
 //!     dans les deux    .github/copilot/settings.json à la racine Git
+//!                      .github/agents/<nom>.agent.md, le profil du menu d'agent
 //!                      .github/copilot/perimetre.json pour la garde d'écriture
 //!                      agents/<autres>/AGENTS.md pour le rôle
+//!
+//! `--profils` MET À NIVEAU un projet déjà en équipe sans lui ajouter d'agent :
+//! profils manquants, périmètres réécrits en chemins relatifs.
 //!
 //! CE QU'ELLE NE FAIT PAS : découper le `AGENTS.md` du projet (éditorial),
 //! toucher aux faits, aux traces ni au code.
@@ -47,7 +51,7 @@ fn role(nom: &str) -> String { ROLE.replacen("{}", nom, 1) }
 /// Tout ce qui n'est pas alphanumérique devient un tiret, et une suite de tels
 /// caractères UN SEUL : deux noms d'agents qui donnent la même clé auraient les
 /// mêmes dossiers d'état.
-fn slug(p: &str) -> String {
+pub(crate) fn slug(p: &str) -> String {
     let mut out = String::new();
     let mut dans = false;
     for c in p.chars() {
@@ -134,14 +138,26 @@ fn reglages_racine(projet: &Path, appliquer: bool, rap: &mut Vec<(String, String
     Ok(())
 }
 
+/// LE PÉRIMÈTRE D'UN AGENT, EN CHEMINS RELATIFS À LA RACINE DU PROJET.
+///
+/// Jusqu'en 0.15.0 il était écrit en ABSOLU, donc vers le dossier principal :
+/// dans une copie de travail de l'app, aucune écriture n'y tombait et la garde
+/// laissait tout passer. Relatif, il se pose sur la copie où l'on travaille.
+/// Les entrées existantes sous le projet sont réécrites en relatif ; celles
+/// qui visent un dossier hors du projet restent telles quelles.
 fn perimetre_agent(cible: &Path, projet: &Path, autres: &[String],
                    appliquer: bool, rap: &mut Vec<(String, String)>) -> Result<(), String> {
     crate::copilot::avertit_settings_agent(cible);
-    let mut denies: Vec<PathBuf> = autres.iter().map(|a| projet.join("agents").join(a)).collect();
+    let mut denies: Vec<String> = autres.iter().map(|a| format!("agents/{a}")).collect();
     let perimetre = cible.join(".github/copilot/perimetre.json");
     if perimetre.exists() {
-        for chemin in crate::copilot::perimetre(cible)? {
-            if !denies.contains(&chemin) { denies.push(chemin); }
+        let base = projet.canonicalize().unwrap_or_else(|_| projet.to_path_buf());
+        for chemin in crate::copilot::lis_deny(cible)? {
+            let ecrit = if chemin.is_relative() { rel(Path::new(""), &chemin) } else {
+                let c = chemin.canonicalize().unwrap_or_else(|_| chemin.clone());
+                if c.starts_with(&base) { rel(&base, &c) } else { chemin.to_string_lossy().to_string() }
+            };
+            if !ecrit.is_empty() && !denies.contains(&ecrit) { denies.push(ecrit); }
         }
     }
     rap.push(("+".into(), format!("{} — {} dossier(s) interdits par la garde Edit|Write",
@@ -159,6 +175,89 @@ fn perimetre_agent(cible: &Path, projet: &Path, autres: &[String],
         }
     }
     Ok(())
+}
+
+/// LE PROFIL DU MENU D'AGENT — `.github/agents/<nom>.agent.md`, à la racine Git.
+///
+/// L'app Copilot lance chaque conversation à la racine d'une copie de travail :
+/// le dossier `agents/<nom>/` ne dit plus qui parle. Ce profil fait apparaître
+/// l'agent dans le menu du champ de saisie ; le harnais lit ensuite le choix
+/// dans le journal de session et sert le rôle, l'état et le périmètre (voir
+/// `agent`). Le profil reste COURT : il ne recopie pas le rôle, qui n'a qu'une
+/// maison. Sa dernière phrase est le secours d'une session sans harnais.
+/// Jamais écrasé : un profil existant est peut-être déjà ajusté à la main.
+fn profil(racine_git: &Path, projet: &Path, n: &str, esprit: &Path, appliquer: bool,
+          rap: &mut Vec<(String, String)>) {
+    let nom_profil = crate::agent::nom_de_profil(n);
+    if nom_profil.is_empty() {
+        rap.push(("⚠".into(), format!("agent {n} : aucun nom de profil possible — profil non écrit")));
+        return;
+    }
+    let f = racine_git.join(".github/agents").join(format!("{nom_profil}.agent.md"));
+    if f.exists() {
+        rap.push(("·".into(), format!("{} existe : non écrasé", rel(projet, &f))));
+        return;
+    }
+    rap.push(("+".into(), format!("{} — l'agent {n} dans le menu d'agent de l'app", rel(projet, &f))));
+    if appliquer {
+        let role = format!("agents/{n}/AGENTS.md");
+        let etat = rel(projet, esprit);
+        let texte = format!("---\nname: {nom_profil}\ndescription: Agent {n} de {projet_nom} — son rôle est dans {role}\n---\n\
+Tu es l'agent {n} de ce projet. À chaque ouverture, le harnais te sert ton rôle ({role}), \
+ton état ({etat}/) et ton périmètre d'écriture.\n\n\
+S'il ne te les a pas montrés, lis d'abord {role}, puis {etat}/state.md et {etat}/todo.md, avant toute réponse.\n",
+            projet_nom = nom(projet));
+        if let Some(d) = f.parent() { let _ = std::fs::create_dir_all(d); }
+        let _ = std::fs::write(&f, texte);
+    }
+}
+
+/// Deux agents dont les profils porteraient le même nom : le menu n'en
+/// montrerait qu'un, et le choix désignerait le mauvais dossier.
+fn profils_en_collision(tous: &[String]) -> Option<String> {
+    for (i, a) in tous.iter().enumerate() {
+        for b in &tous[i + 1..] {
+            if crate::agent::nom_de_profil(a) == crate::agent::nom_de_profil(b) {
+                return Some(format!("{a} et {b} donnent le même profil « {} »", crate::agent::nom_de_profil(a)));
+            }
+        }
+    }
+    None
+}
+
+/// `--profils` : un projet DÉJÀ en équipe, mis à niveau sans nouvel agent.
+fn mise_a_niveau(p: &Path, appliquer: bool) -> i32 {
+    let (f, existants, disp) = forme(p);
+    if f != "multi" {
+        eprintln!("equipe --profils : ce projet n'est pas en équipe ({f}) — rien à mettre à niveau. \
+Pour le passer en équipe : `harnais equipe --agents A,B`.");
+        return 1;
+    }
+    if let Some(c) = profils_en_collision(&existants) { eprintln!("equipe --profils : {c} ; rien n'est écrit"); return 1; }
+    let racine = match crate::copilot::racine_git(p) { Ok(r) => r, Err(e) => { eprintln!("equipe : {e}"); return 1; } };
+    let mut rap: Vec<(String, String)> = vec![];
+    for n in &existants {
+        let d = p.join("agents").join(n);
+        let autres: Vec<String> = existants.iter().filter(|x| *x != n).cloned().collect();
+        if let Err(e) = perimetre_agent(&d, p, &autres, appliquer, &mut rap) { eprintln!("equipe : {e}"); return 1; }
+        profil(&racine, p, n, &disp.esprit(n), appliquer, &mut rap);
+    }
+    println!("── profils — {} ({}){}", nom(p), existants.join(", "), if appliquer { "" } else { "  [DRY-RUN]" });
+    for (signe, ligne) in &rap { println!("  {} {}", signe, ligne); }
+    println!("\n── À reprendre à la main");
+    println!("  · {}", a_commiter(&existants));
+    if !appliquer { println!("\nDry-run. Relancer avec --apply pour écrire."); }
+    0
+}
+
+/// La dernière consigne, la même pour les deux chemins.
+fn a_commiter(tous: &[String]) -> String {
+    format!("COMMITER `.github/agents/` et les périmètres : une nouvelle conversation de l'app part de \
+l'état COMMITÉ, un profil non commité n'apparaît pas dans le menu. Ensuite, choisir l'agent dans le menu \
+d'agent du champ de saisie ({}) ; dans le CLI, `copilot --agent <nom>` ou une session lancée dans \
+`agents/<nom>/`. Sans agent choisi, {} tient la session s'il existe — le briefing le dit.",
+        tous.iter().map(|n| crate::agent::nom_de_profil(n)).collect::<Vec<_>>().join(", "),
+        crate::agent::DEFAUT)
 }
 
 /// Le serveur MCP du projet peut être propre à un agent : copier uniquement .mcp.json.
@@ -187,10 +286,19 @@ fn valeur(args: &[String], cle: &str) -> Option<String> {
 
 pub fn main(args: &[String]) -> i32 {
     if args.iter().any(|a| a == "-h" || a == "--help") {
-        println!("harnais equipe --agents A,B[,C] [--project-root P] [--apply]\n\n\
+        println!("harnais equipe --agents A,B[,C] [--project-root P] [--apply]\n\
+harnais equipe --profils [--project-root P] [--apply]\n\n\
 Passe un projet mono en équipe (le PREMIER nommé hérite de l'état existant),\n\
-ou ajoute des agents à un projet déjà en équipe. À blanc par défaut.");
+ou ajoute des agents à un projet déjà en équipe. Chaque agent reçoit son profil\n\
+`.github/agents/<nom>.agent.md`, qui le fait apparaître dans le menu d'agent de l'app.\n\
+`--profils` met à niveau un projet déjà en équipe : profils manquants, périmètres\n\
+en chemins relatifs. À blanc par défaut.");
         return 0;
+    }
+    if args.iter().any(|a| a == "--profils") {
+        let p0 = PathBuf::from(valeur(args, "--project-root").unwrap_or_else(|| ".".into()));
+        let p = p0.canonicalize().unwrap_or(p0);
+        return mise_a_niveau(&p, args.iter().any(|a| a == "--apply" || a == "--go"));
     }
     let Some(liste) = valeur(args, "--agents") else {
         eprintln!("harnais equipe : --agents est requis (noms séparés par des virgules ; \
@@ -214,6 +322,12 @@ Lancer d'abord la migration de mémoire, puis revenir.");
         eprintln!("equipe : liste vide ou agent déjà présent ; aucun fichier n'a été écrasé");
         return 1;
     }
+    let tous_prevus: Vec<String> = existants.iter().chain(noms.iter()).cloned().collect();
+    if let Some(c) = profils_en_collision(&tous_prevus) {
+        eprintln!("equipe : {c} — le menu d'agent n'en montrerait qu'un ; aucun fichier n'a été écrit");
+        return 1;
+    }
+    let racine = match crate::copilot::racine_git(&p) { Ok(r) => r, Err(e) => { eprintln!("equipe : {e}"); return 1; } };
     if let Err(e) = reglages_racine(&p, appliquer, &mut rap) { eprintln!("equipe : {e}"); return 1; }
     let (neufs, tous): (Vec<String>, Vec<String>);
     if f == "mono" {
@@ -284,6 +398,10 @@ Lancer d'abord la migration de mémoire, puis revenir.");
         porte_les_non_herites(&p, &d, appliquer, &mut rap);
     }
 
+    // LES PROFILS DU MENU D'AGENT — tous, anciens compris : un projet converti
+    // avant 0.16.0 n'en a aucun.
+    for n in &tous { profil(&racine, &p, n, &disp.esprit(n), appliquer, &mut rap); }
+
     // LE CARNET D'ÉQUIPE — LU partout, il ne serait CRÉÉ nulle part sans cet
     // appel. On appelle la règle qui le place, on ne la recopie pas.
     if appliquer {
@@ -321,9 +439,7 @@ racine, le rôle descend dans agents/<nom>/AGENTS.md. Contrôle de sortie : aucu
 resterait vraie pour un autre agent.".into());
     reste.push("ÉCRIRE LES PÉRIMÈTRES en dossiers dans chaque perimetre.json : les dossiers interdits ne couvrent \
 que les dossiers d'agents. Le code, lui, n'est pas partagé au hasard — dire qui tient quoi.".into());
-    reste.push(format!("RELANCER LES SESSIONS COPILOT DANS les dossiers d'agents, sous des noms slugifiés \
-({}). L'ancienne session à la racine n'a plus d'agent : le briefing l'avertira au lieu de se taire.",
-        tous.iter().map(|n| slug(n).to_lowercase().trim_matches('-').to_string()).collect::<Vec<_>>().join(", ")));
+    reste.push(a_commiter(&tous));
 
     println!("── agents — {} ({}){}", nom(&p), f, if appliquer { "" } else { "  [DRY-RUN]" });
     for (signe, ligne) in &rap { println!("  {} {}", signe, ligne); }
@@ -335,7 +451,49 @@ que les dossiers d'agents. Le code, lui, n'est pas partagé au hasard — dire q
 
 #[cfg(test)]
 mod essais {
-    use super::slug;
+    use super::*;
+
+    /// UN PROJET CONVERTI AVANT 0.16.0 : périmètres absolus vers le dossier
+    /// principal, pas de profils, un profil écrit à la main. `--profils` le met à
+    /// niveau sans rien écraser.
+    #[test]
+    fn la_mise_a_niveau_ecrit_les_profils_et_des_perimetres_relatifs() {
+        let d = std::env::temp_dir().join(format!("equipe-profils-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join(".github/agents")).unwrap();
+        assert!(Command::new("git").args(["init", "-q"]).current_dir(&d).status().unwrap().success());
+        let d = d.canonicalize().unwrap();
+        std::fs::create_dir_all(d.join("brain/fact")).unwrap();
+        for a in ["OPS", "Projet QA"] {
+            std::fs::create_dir_all(d.join("brain/mind").join(a)).unwrap();
+            std::fs::write(d.join("brain/mind").join(a).join("state.md"), "---\nmaj: 2026-10-01\n---\n").unwrap();
+            std::fs::create_dir_all(d.join("agents").join(a).join(".github/copilot")).unwrap();
+        }
+        std::fs::write(d.join("agents/OPS/.github/copilot/perimetre.json"),
+            json!({"deny": [d.join("agents/Projet QA"), "/hors/projet"]}).to_string()).unwrap();
+        std::fs::write(d.join(".github/agents/ops.agent.md"), "à la main\n").unwrap();
+
+        assert_eq!(mise_a_niveau(&d, true), 0);
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(
+            d.join("agents/OPS/.github/copilot/perimetre.json")).unwrap()).unwrap();
+        assert_eq!(v["deny"], json!(["agents/Projet QA", "/hors/projet"]), "relatif sous le projet, absolu hors");
+        assert_eq!(std::fs::read_to_string(d.join(".github/agents/ops.agent.md")).unwrap(), "à la main\n",
+                   "un profil existant n'est jamais écrasé");
+        let qa = std::fs::read_to_string(d.join(".github/agents/projet-qa.agent.md")).unwrap();
+        assert!(qa.starts_with("---\nname: projet-qa\n"), "{qa}");
+        assert!(qa.contains("agents/Projet QA/AGENTS.md") && qa.contains("brain/mind/Projet QA/state.md"));
+        assert_eq!(crate::agent::correspond("projet-qa", &["OPS".into(), "Projet QA".into()]).as_deref(),
+                   Some("Projet QA"), "le nom écrit dans le profil désigne bien le dossier");
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn deux_agents_au_meme_profil_sont_refuses() {
+        assert!(profils_en_collision(&["QA".into(), "qa".into()]).is_some());
+        assert!(profils_en_collision(&["Q A".into(), "Q-A".into()]).is_some());
+        assert!(profils_en_collision(&["OPS".into(), "PO".into(), "QA".into()]).is_none());
+    }
+
     #[test]
     fn deux_noms_qui_donnent_la_meme_cle_se_voient() {
         assert_eq!(slug("/Users/x/Projet Studio"), "-Users-x-Projet-Studio");

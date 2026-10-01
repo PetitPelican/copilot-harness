@@ -194,12 +194,15 @@ fn sommaire(p: &Path, combien: usize) -> Option<(usize, Vec<String>)> {
 }
 
 /// Le périmètre lu par la garde Edit|Write, sans promesse sur les outils shell.
-fn droits(r: &Path) -> (Option<String>, Option<(String, Vec<String>, Vec<String>)>) {
+fn droits(r: &Path, aff: &Path) -> (Option<String>, Option<(String, Vec<String>, Vec<String>)>) {
     let garde = r.join(".github/copilot/perimetre.json");
     if !garde.exists() { return (None, None); }
+    // Affichés depuis le dossier de la SESSION : ce sont les chemins que la
+    // garde compare, posés sur la copie courante (voir `copilot::perimetre`).
+    let vu = |p: &Path| crate::socle::chemin_affiche(aff, &p.canonicalize().unwrap_or_else(|_| p.to_path_buf()));
     match crate::copilot::perimetre(r) {
-        Ok(deny) => (Some(garde.display().to_string()), Some(("garde preToolUse".into(), vec![],
-            deny.iter().map(|d| d.display().to_string()).collect()))),
+        Ok(deny) => (Some(vu(&garde)), Some(("garde preToolUse".into(), vec![],
+            deny.iter().map(|d| vu(d)).collect()))),
         Err(e) => (Some(format!("périmètre illisible : {e}")), None),
     }
 }
@@ -568,6 +571,13 @@ fn prefixe_affiche(ou: &Path, ancre: &Path, defaut: &str) -> String {
 /// `.fact/` — le même en mono, `None` avant migration.
 pub fn compose(r: &Path, projet: Option<&Path>, session: &str) -> String {
     let mut l: Vec<String> = Vec::new();
+    // D'OÙ S'AFFICHENT LES CHEMINS : le dossier de la session. Le harnais a pu
+    // se placer dans `agents/<nom>/` alors que l'agent travaille à la racine de
+    // sa copie (voir `agent`) : un chemin relatif au premier ne s'ouvre pas
+    // depuis la seconde.
+    let aff = crate::agent::ancre_affichage(r);
+    let (agent_tete, agent_fin) = crate::agent::session()
+        .map(crate::agent::lignes_briefing).unwrap_or_default();
     let faits = fait_de(r, projet);
     let md = mind_de(r);
     let e = entete(&lis(&md.join("state.md")));
@@ -605,6 +615,7 @@ pub fn compose(r: &Path, projet: Option<&Path>, session: &str) -> String {
         _ => nom_r.clone(),
     };
     l.push(format!("── Briefing d'entrée · {} ─ relu à l'instant, jamais recopié ──", titre));
+    l.extend(agent_tete);
     l.push(format!("cap    : {}", cap.unwrap_or_else(||
         format!("AUCUN `cap:` déclaré dans {}", ou_cap))));
     l.push(format!("état   : {}{} · santé {} · jalon : {}", frais,
@@ -629,7 +640,7 @@ pub fn compose(r: &Path, projet: Option<&Path>, session: &str) -> String {
         // qui n'a RIEN à faire — c'est-à-dire celui qui va justement ouvrir le
         // fichier pour y écrire.
         l.push(format!("attente: aucune tâche `@<qui>` ouverte dans {}",
-                       crate::socle::chemin_affiche(r, &md.join("todo.md"))));
+                       crate::socle::chemin_affiche(&aff, &md.join("todo.md"))));
     }
 
     // LA CIBLE, AU-DESSUS DE TOUT LE RESTE DU PROJET : d'abord ce qui attend
@@ -694,7 +705,7 @@ pub fn compose(r: &Path, projet: Option<&Path>, session: &str) -> String {
     fichiers.push(("rules.md", "ce qu'on ne franchit pas"));
     fichiers.push(("architecture.md", "comment c'est agencé, les frontières"));
     for (nom, quoi) in fichiers {
-        let chemin = crate::socle::chemin_affiche(r, &ou.join(nom));
+        let chemin = crate::socle::chemin_affiche(&aff, &ou.join(nom));
         match sommaire(&ou.join(nom), 7) {
             None => l.push(format!("  {} ABSENT — {} : personne ne le sait.",
                                    cale(&chemin, colonne), quoi)),
@@ -706,13 +717,13 @@ pub fn compose(r: &Path, projet: Option<&Path>, session: &str) -> String {
     }
     let racine_doc = projet.unwrap_or(r);
     if faits.is_some() && racine_doc.join("docs").is_dir() {
-        let d = crate::socle::chemin_affiche(r, &racine_doc.join("docs").join("decisions.md"));
+        let d = crate::socle::chemin_affiche(&aff, &racine_doc.join("docs").join("decisions.md"));
         l.push(format!("  {} le pourquoi de chaque choix, daté", cale(&d, 23)));
     } else {
         l.push("  .memory/decisions.md   le pourquoi de chaque choix, daté".into());
     }
 
-    let (fichier, d) = droits(r);
+    let (fichier, d) = droits(r, &aff);
     l.push(String::new());
     match d {
         None => {
@@ -737,6 +748,8 @@ pub fn compose(r: &Path, projet: Option<&Path>, session: &str) -> String {
         Ok(None) => (),
         Err(e) => l.push(format!("Accueil CTO : registre invalide — {e}. Corriger avant de déclarer un projet.")),
     }
+    // LE RÔLE EN DERNIER : il est long, et ce qui précède se lit d'un coup d'œil.
+    if !agent_fin.is_empty() { l.push(String::new()); l.extend(agent_fin); }
     l.join("\n")
 }
 
@@ -771,7 +784,9 @@ pub fn avertit_racine(projet: &Path) -> String {
         l.push("Les agents de ce projet sont dans `agents/` :".into());
         for n in &noms { l.push(format!("  · {}", n)); }
         l.push(String::new());
-        l.push("Relance la session DANS le dossier de l'agent voulu.".into());
+        l.push("Choisis l'agent dans le menu d'agent du champ de saisie de l'app".into());
+        l.push("(profil `.github/agents/<nom>.agent.md`), ou relance la session".into());
+        l.push("DANS le dossier de l'agent voulu.".into());
     } else {
         l.push("Aucun agent n'est encore déclaré : `agents/<nom>/` est vide".into());
         l.push("ou absent. Soit ce projet doit être converti, soit il lui".into());
@@ -909,7 +924,11 @@ pub fn main(entree: &str) {
         if !signaux.is_empty() { emet(&signaux.join("\n\n")); }
         return;
     }
-    let signature = empreinte(&ancre, projet.as_deref());
+    // L'AGENT FAIT PARTIE DE CE QUI A ÉTÉ SERVI : un changement d'agent dans le
+    // menu, un retour après « Default agent », une compaction qui a pu effacer
+    // le briefing du contexte — chacun le fait repartir. Voir `agent`.
+    let signature = format!("{}{}", empreinte(&ancre, projet.as_deref()),
+        crate::agent::session().map(|s| format!("|{}", s.signature())).unwrap_or_default());
     // Sans identifiant on ne déduit jamais que deux appels sont la même session.
     if !session.is_empty() && deja_servi(&session_etat, &signature) {
         let _ = std::fs::remove_file(&verrou);

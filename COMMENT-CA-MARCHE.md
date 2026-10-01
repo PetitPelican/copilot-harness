@@ -116,9 +116,11 @@ Une déclaration ne prouve pas l'exécution. Vérifier le briefing, le refus de
 la garde et la trace de version avant d'annoncer qu'un agent est servi.
 
 Le briefing identique est dédupliqué entre `SessionStart` et
-`userPromptTransformed` par **identifiant de session et dossier de lancement**.
+`userPromptTransformed` par **identifiant de session et dossier de l'agent**.
 Les faits, l'état, les tâches, les périmètres et le carnet sont comparés par
-leur contenu : un changement réinjecte le contexte au prompt suivant.
+leur contenu : un changement réinjecte le contexte au prompt suivant. Un
+changement d'agent dans le menu et une compaction de la conversation le
+réinjectent aussi (section 9).
 Sans identifiant fourni par l'hôte, aucune session n'est assimilée à une autre :
 la déduplication n'est alors pas garantie.
 
@@ -292,19 +294,47 @@ sans rien écrire.**
 ## 9. Deux formes : un agent, ou une équipe
 
 En mono : `brain/fact/`, `brain/mind/` et le `AGENTS.md` du projet à la racine
-git. En multi : `brain/fact/` partagé, `brain/mind/<nom>/` pour chacun, et
-`agents/<nom>/AGENTS.md` pour son rôle. Le `AGENTS.md` de la racine git est lu
-aussi par chaque agent, car c'est un dossier intermédiaire jusqu'à son `cwd`.
-`brain/fact/roles.md` nomme les zones partagées et les frontières.
+git. En multi : `brain/fact/` partagé, `brain/mind/<nom>/` pour chacun,
+`agents/<nom>/AGENTS.md` pour son rôle, et `.github/agents/<nom>.agent.md`
+pour son profil. `brain/fact/roles.md` nomme les zones partagées et les
+frontières.
 
-`harnais equipe` pose le périmètre de chaque agent dans le dossier de
-lancement ; la garde `PreToolUse` du plugin en est le lecteur. Copilot ignore
-`permissions.deny` hors réglages managés. La forme multi-agents écrit aussi les réglages
-dans chaque dossier de lancement ; dans un dépôt git commun, **Copilot ne les
-lit pas**. Ni le paquet ni ses hooks ne sont activés indépendamment par cette
-forme. Si le plugin est activé à la racine, ses hooks sont communs au dépôt ;
-la garde peut encore lire le périmètre de l'agent courant, à vérifier par un
-essai effectif. Sans plugin chargé, il n'y a aucune garde.
+**Qui parle.** L'app Copilot lance chaque conversation à la racine d'une copie
+de travail : le dossier de lancement ne dit plus qui parle. L'agent se choisit
+dans le menu d'agent du champ de saisie, qui liste les profils
+`.github/agents/` **commités**. Aucun hook ne reçoit ce choix ; Copilot l'écrit
+dans le journal de la session (`~/.copilot/session-state/<id>/events.jsonl`,
+mesuré dans l'app et le CLI 1.0.91-1) : `subagent.selected` avec le nom de
+l'agent, `subagent.deselected` pour « Default agent », avant le premier hook,
+un nouveau à chaque changement par le menu, un nouveau en tête de la session
+qu'ouvre `/clear`, intact après `/compact`. Les sous-agents de l'outil task
+n'y écrivent ni l'un ni l'autre ; leurs événements portent un `agentId` et
+sont ignorés.
+
+Chaque hook lit ce journal et applique la règle : l'agent choisi dans le menu
+(ou `copilot --agent <nom>`), sinon le dossier de lancement s'il est dans
+`agents/<nom>/`, sinon **QA** s'il existe — « Default agent » prend QA —, sinon
+aucun agent. Le harnais se place alors dans `agents/<nom>/` de la copie,
+comme si la session y avait été lancée : état, todo, garde de commit,
+périmètre, journal et fin de tour suivent cet agent. Le briefing le dit
+(`agent : OPS — choisi dans le menu…, ligne 2`) et, quand Copilot ne l'a pas
+chargé, **montre** le rôle : un profil qui demande au modèle de lire
+`AGENTS.md` laisse la lecture à sa bonne volonté — mesuré. `harnais agent
+--session <id> --racine <copie>` rejoue la résolution, en lecture seule.
+
+`harnais equipe` pose le périmètre de chaque agent dans `agents/<nom>/`, en
+chemins **relatifs à la racine du projet** ; la garde `PreToolUse` du plugin
+en est le lecteur. Elle les pose sur la copie de travail courante, transpose
+les chemins absolus d'avant 0.16.0 qui visaient le dossier principal, et
+interdit aussi ce dossier principal depuis la copie. Un chemin relatif passé à
+un outil se lit depuis le dossier de la session. `harnais equipe --profils`
+met à niveau un projet déjà en équipe. Copilot ignore `permissions.deny` hors
+réglages managés. Les réglages du plugin ne valent qu'à la racine git : le
+paquet s'y active une fois pour tous les agents, et la séparation vient du
+choix d'agent et de la garde, à vérifier par un essai effectif. Sans plugin
+chargé, il n'y a aucune garde. Un agent du projet appelé comme sous-agent
+n'est pas suivi : ses écritures sont jugées sous le périmètre de l'agent de la
+conversation.
 
 Copilot lit `AGENTS.md` et `CLAUDE.md` sans ordre de priorité général : signaler
 un doublon et ne pas laisser des contenus divergents. Copilot ne remonte pas

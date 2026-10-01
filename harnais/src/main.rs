@@ -16,6 +16,7 @@
 //! blocages volontaires passent par un code 2 explicite, jamais par une panne.
 
 mod adopte;
+mod agent;
 mod atelier;
 mod attente;
 mod briefing;
@@ -74,6 +75,7 @@ fn aide() {
          \x20 perimetre   PreToolUse/Edit|Write — refuse les écritures hors lot\n\
          \x20 relecture    lance le juge sur les demandes en attente\n\
          \x20 diagnostic   ce que je trouve, ce que je ne trouve pas, et par quel shell\n\
+         \x20 agent        l'agent actif d'une session : journal lu, règle appliquée (lecture seule)\n\
          \x20 carnet-essai un banc du carnet, pour les contrôles\n\
          \x20 todo-blocs   les blocs du todo tels que la fin de tour les lit (JSON)\n\
          \x20 rappels      la liste Rappels d'un agent, lue comme la fin de tour la lit\n"
@@ -89,13 +91,13 @@ fn main() {
         "lecture" => {
             let mut t = String::new();
             let _ = std::io::stdin().read_to_string(&mut t);
-            poids::main(&hote::prepare(&t));
+            poids::main(&hote::prepare_sans_agent(&t));
         }
         "curateur" => std::process::exit(poids::curateur(&args[1..])),
         "journal" => {
             let mut t = String::new();
             let _ = std::io::stdin().read_to_string(&mut t);
-            let t = hote::prepare(&t);
+            let t = hote::prepare_si_commit(&t);
             journal::main(&t);
         }
         "attente" => {
@@ -142,7 +144,7 @@ fn main() {
         "mind-guard" => {
             let mut t = String::new();
             let _ = std::io::stdin().read_to_string(&mut t);
-            let t = hote::prepare(&t);
+            let t = hote::prepare_si_commit(&t);
             mind_guard::main(&t);
         }
         "relecture" => relecture::main(&args[1..]),
@@ -150,6 +152,7 @@ fn main() {
         // rien risquer : elle ne modifie rien, et elle dit CE QU'ELLE NE TROUVE
         // PAS autant que ce qu'elle trouve.
         "diagnostic" => diagnostic::main(&args[1..]),
+        "agent" => std::process::exit(agent::main(&args[1..])),
         "adopte" => std::process::exit(adopte::main(&args[1..])),
         "menage" => std::process::exit(menage::main(&args[1..])),
         "atelier-monte" => std::process::exit(atelier::main(&args[1..])),
