@@ -640,6 +640,11 @@ pub fn compose(r: &Path, projet: Option<&Path>, session: &str) -> String {
     if let Some(f) = faits.as_ref().and_then(|f| faits_perimes(f)) {
         l.extend(f.split('\n').map(String::from));
     }
+    if let Some(f) = faits.as_ref() {
+        if let Some(p) = f.parent().and_then(|b| crate::poids::ligne_briefing(&b.join("poids.json"), f)) {
+            l.extend(p.split('\n').map(String::from));
+        }
+    }
     if let Some(m) = memoire_copilot(&crate::hote::maison_copilot().join("settings.json")) {
         l.extend(m.split('\n').map(String::from));
     }

@@ -127,12 +127,9 @@ pub fn depart(niveau: &str, maison: Maison) -> i64 {
 /// qui TIENT, une tâche aboutie au carnet.
 pub const REUSSITE: f64 = 1.03;
 /// Une garde a mordu après la lecture : échec MINEUR — un rappel de forme
-/// n'est pas un démenti. Sans lecteur jusqu'à ce que `brain/poids.json` porte
-/// la confiance des faits.
-#[allow(dead_code)]
+/// n'est pas un démenti.
 pub const GARDE: f64 = 0.92;
-/// Un constat démenti deux fois de suite : le vrai démenti. Même attente.
-#[allow(dead_code)]
+/// Un constat démenti deux fois de suite : le vrai démenti.
 pub const DEMENTI: f64 = 0.90;
 /// Une tâche que son agent déclare échouée au carnet — le coup le plus dur.
 pub const ECHEC_DECLARE: f64 = 0.85;

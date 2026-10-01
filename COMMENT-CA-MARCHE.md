@@ -222,9 +222,27 @@ Le niveau (`mesuré`, `observé`, `supposé`, `dit`) fixe d'où part la confianc
 une nature facultative après la date (`· croyance`, `· expérience`, `· fait`)
 fixe la vitesse de vieillissement : 4 semaines pour un fait, 2 pour une croyance
 — une supposition l'est d'office —, 6 pour une expérience. Le briefing applique
-cette péremption ; la confiance chiffrée qui bouge avec les résultats ne
-s'applique pas encore à `brain/fact/`. Sans lien rejouable, un niveau n'est
-qu'un mot.
+cette péremption. Sans lien rejouable, un niveau n'est qu'un mot.
+
+**La confiance des sections, `brain/poids.json`.** Le hook `lecture`
+(PostToolUse sur `Read` et `Bash`) note quelles sections de `brain/fact/`
+l'agent lit. Relevé sur Copilot CLI 1.0.90-0 : une lecture par l'outil `view`
+arrive sous `tool_name: "Read"` avec `tool_input.path`, et une lecture partielle
+porte `view_range: [début, fin]` — elle ne crédite que les sections qu'elle
+couvre ; une lecture par le shell arrive sous `Bash`, la commande en clair.
+
+| Fichier | Contenu | Durée de vie |
+|---|---|---|
+| `brain/poids.json` (commité) | par section : `conf`, `jours_lus`, `vu`, `verdicts` | suit le projet, ses worktrees et ses agents |
+| registre de session (dossier d'état) | les sections lues depuis le dernier verdict | vidé à chaque résultat |
+
+La confiance part du niveau (mesuré 80, dit 85, observé 60, supposé 40, inconnu
+50). Un résultat la multiplie, pour les seules sections lues depuis le verdict
+précédent : constat qui tient ×1,03, garde qui mord ×0,92, constat démenti deux
+fois ×0,90. `vu` et `jours_lus` ne bougent qu'une fois par jour, pour ne pas
+réécrire le fichier à chaque lecture. Le briefing signale les sections sous 50
+et celles qui dorment (30 jours sans lecture, gradués par la nature) ;
+`harnais curateur` en donne le détail. Rien n'est jamais déplacé ni effacé.
 
 ---
 

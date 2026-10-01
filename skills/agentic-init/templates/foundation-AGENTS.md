@@ -67,7 +67,8 @@ autre agent du projet va dans `brain/fact/` ; ce que cet agent seul tient, dans
 
 **Jamais un troisième fichier dans `brain/mind/`, ni un cinquième dans
 `brain/fact/` (un sixième à plusieurs), sans une décision explicite de
-l'humain.** S'il n'y rentre pas, il
+l'humain.** Le seul fichier à la racine de `brain/` est `poids.json`, écrit par
+le harnais (voir `lecture`). S'il n'y rentre pas, il
 est à `docs/`. Et `brain/` reste **à la racine du dépôt**, jamais à un niveau
 intermédiaire — l'outillage n'en cherche qu'un.
 
@@ -305,10 +306,15 @@ Deux autres regardent les commandes shell.
   `HEAD`, pas le retour de la commande : un commit échoué n'écrit rien, un
   double appel ne crée pas deux entrées.
 
-Sous Copilot, pas de compteur de mémoire auto fichier : ne pas promettre une
-boucle de lecture de ces notes. La confiance chiffrée qui bouge avec les
-résultats n'est **pas encore** appliquée aux sections de `brain/fact/` ; seules
-la péremption par niveau et par nature le sont.
+- **`lecture`** (`postToolUse` / `PostToolUse`, sur `Read` et `Bash`) — note
+  quelles **sections** de `brain/fact/` l'agent lit (une lecture partielle ne
+  crédite que les sections qu'elle couvre). Leur confiance vit dans
+  **`brain/poids.json`**, commité : elle part du niveau d'établissement (mesuré
+  80, dit 85, observé 60, supposé 40), et les résultats la font bouger — une
+  garde qui mord, un constat qui tient, un constat démenti — pour les seules
+  sections lues depuis le verdict précédent. Le briefing signale les sections
+  peu sûres ou endormies ; `harnais curateur` en donne le détail. Rien n'est
+  jamais déplacé ni effacé, et `poids.json` ne s'édite pas à la main.
 
 Le dernier ne dépend d'aucune commande, et c'est ce qui fait sa valeur.
 

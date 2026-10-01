@@ -87,6 +87,13 @@ fn slug(s: &str) -> String {
 
 fn lis(p: &Path) -> String { std::fs::read_to_string(p).unwrap_or_default() }
 
+/// Un résultat retombe sur les sections de faits lues dans cette session
+/// depuis le dernier verdict (`brain/poids.json`).
+fn resultat(mult: f64) {
+    let (_, session, _) = ctx();
+    crate::poids::resultat(&socle::socle(), &session, mult);
+}
+
 fn re(p: &str) -> Regex { Regex::new(p).unwrap() }
 fn fre(p: &str) -> FRegex { FRegex::new(p).unwrap() }
 
@@ -147,6 +154,10 @@ fn sortie(code: i32, message: Option<String>, quoi: Option<&str>, detail: &str) 
         if let Some(q) = quoi {
             let vues = recidive(q, 7);          // AVANT d'écrire la ligne de ce tour
             journal(q, detail);
+            // UNE GARDE QUI MORD EST UN RÉSULTAT : ce qu'on avait lu en chemin
+            // n'a pas empêché le blocage. Échec MINEUR — un rappel de forme
+            // n'est pas un constat démenti.
+            resultat(crate::nature::GARDE);
             // LA PROMOTION QUI MANQUAIT : une panne qui revient devient une
             // ligne de la liste de contrôle. Pas au premier passage — une garde
             // qui mord une fois a fait son travail.
@@ -2223,6 +2234,9 @@ tâche et non un constat, retire `?constat`.", manquants.len(), ech)),
         if verdict == TIENT {
             attente[n].corps.push_str(&format!(" · reconfirmé le {}", jour));
             tombes_apres.retain(|x| *x != h);
+            // UN CONSTAT QUI TIENT EST LE MEILLEUR RÉSULTAT : une commande vient
+            // de confirmer une affirmation.
+            resultat(crate::nature::REUSSITE);
         } else if verdict == MUET {
             // JAMAIS lu comme une confirmation : le constat part quand même.
             attente[n].corps.push_str(&format!(" · le {}, {}", jour, raison));
@@ -2231,6 +2245,8 @@ tâche et non un constat, retire `?constat`.", manquants.len(), ech)),
             attente[n].tombe = true;                 // deuxième échec de suite
             tombes.push(attente[n].titre.clone());
             tombes_apres.retain(|x| *x != h);
+            // DEUX ÉCHECS CONSÉCUTIFS : le vrai démenti, pas le premier.
+            resultat(crate::nature::DEMENTI);
         } else {
             attente[n].corps.push_str(&format!(
                 " · le {}, sa vérification a échoué une première fois", jour));

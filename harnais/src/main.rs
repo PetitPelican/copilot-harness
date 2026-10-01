@@ -30,6 +30,7 @@ mod menage;
 mod migration;
 mod mind_guard;
 mod nature;
+mod poids;
 mod relecture;
 mod socle;
 mod vue;
@@ -58,11 +59,13 @@ fn aide() {
          \x20 menage       caches à supprimer, résidus et mémoires trop grosses à signaler\n\
          \x20              à blanc par défaut · `--apply` · `--racine R` pour un atelier\n\n\
          À LA MAIN, pour comprendre ce que je vois :\n\
+         \x20 curateur     la confiance des sections de faits (brain/poids.json), lecture seule\n\
          \x20 resolution   où vit la mémoire de ce dossier (JSON complet)\n\
          \x20 memoire      la même, restreinte — sert à comparer deux versions\n\
          \x20 version      la version du paquet, et l'état du code qui l'a produite\n\n\
          APPELÉES PAR LE HARNAIS (chacune lit sa charge JSON sur l'entrée standard) :\n\
          \x20 journal      PostToolUse/Bash — écrit ce qui a été commité\n\
+         \x20 lecture      PostToolUse/Read|Bash — note les sections de faits lues\n\
          \x20 attente   Stop — ce qui attend @user, et les gardes\n\
          \x20 briefing  SessionStart/userPromptTransformed — le briefing d'entrée\n\
          \x20 carnet    lecture du carnet d'équipe (JSON, pour comparer)\n\
@@ -81,8 +84,14 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let sous = args.first().map(|s| s.as_str()).unwrap_or("");
     if std::env::var_os("HARNAIS_JUGE").is_some()
-        && matches!(sous, "briefing" | "attente" | "mind-guard" | "perimetre" | "journal") { return; }
+        && matches!(sous, "briefing" | "attente" | "mind-guard" | "perimetre" | "journal" | "lecture") { return; }
     match sous {
+        "lecture" => {
+            let mut t = String::new();
+            let _ = std::io::stdin().read_to_string(&mut t);
+            poids::main(&hote::prepare(&t));
+        }
+        "curateur" => std::process::exit(poids::curateur(&args[1..])),
         "journal" => {
             let mut t = String::new();
             let _ = std::io::stdin().read_to_string(&mut t);
