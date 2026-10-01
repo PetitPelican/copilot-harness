@@ -51,8 +51,11 @@ pub fn accueil(racine: &Path) -> Result<Option<&'static str>, String> {
     Ok(projets.is_empty().then_some(
         "ACCUEIL CTO — aucun projet déclaré dans docs/projects.json.\n\
 Termine d'abord les sections À REMPLIR de la mémoire du CTO. Puis demande à\n\
-l'utilisateur s'il a un projet nouveau ou existant ; demande son chemin au\n\
-tour suivant. Ne crée rien avant son accord explicite.\n\
+l'utilisateur s'il a un projet nouveau ou existant ; demande son nom, et où est\n\
+son code s'il existe, au tour suivant. Ne crée rien avant son accord explicite.\n\
+Le projet agentique se crée sous la racine de l'atelier (son propre dépôt git) ;\n\
+un code existant ailleurs y reste, sans rien y écrire : `harnais adopte --code\n\
+\"<chemin du code>\"` depuis le dossier du projet en garde l'adresse.\n\
 Présente les profils : OPS = socle (base, routes serveur, CI, déploiement, workspace) ;\n\
 PO = produit (applications, logique métier, ce que voit l'utilisateur) ;\n\
 QA = épreuve (lit tout, n'écrit nulle part, livre un plan ; ne répare jamais son audit).\n\

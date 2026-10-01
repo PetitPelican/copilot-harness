@@ -48,6 +48,17 @@ const X: &str = "\x1b[0m";
 #[cfg(test)]
 use crate::copilot::PAQUET;
 
+/// La section qui garde l'adresse d'un code qui vit hors du projet. Son titre
+/// porte le chemin : le briefing sert les titres des faits à chaque session.
+fn section_code(code: &Path) -> String {
+    let jour = chrono::Local::now().format("%d/%m/%Y");
+    format!("## Le code : `{c}`\n> **dit** · {jour} — chemin donné à l'adoption\n\n\
+Le code de ce projet vit hors de ce dépôt, à cet emplacement, et y reste. Ce \
+dépôt porte les rôles, `brain/` et `docs/` ; on n'écrit dans le dossier du code \
+que sur demande de @user. En CLI, `copilot --add-dir \"{c}\"` donne accès au code \
+à une session ouverte dans ce projet.\n\n", c = code.display())
+}
+
 fn base_md(nom: &str) -> String {
     format!("---\ncap: À REMPLIR — une phrase : où va ce projet, et pour qui\n---\n\n\
 # {nom}\n\n## Nature\n\nCe que ce projet EST, en trois lignes. Pas son historique.\n\n\
@@ -172,8 +183,19 @@ pub fn main(args: &[String]) -> i32 {
         .map(|s| s.split(',').map(|x| x.trim().to_string())
                   .filter(|x| !x.is_empty()).collect())
         .unwrap_or_default();
+    // LE CODE PEUT VIVRE AILLEURS. Un projet agentique se tient dans l'atelier ;
+    // son code existant reste dans son dépôt — souvent un sous-dossier d'un dépôt
+    // plus large — et n'y reçoit aucun fichier. `--code` en garde l'adresse.
+    let code = args.iter().position(|a| a == "--code").and_then(|i| args.get(i + 1))
+        .map(|s| std::path::absolute(s).unwrap_or_else(|_| PathBuf::from(s)));
+    if let Some(c) = &code {
+        if !c.is_dir() {
+            eprintln!("adopte : --code {} : ce dossier n'existe pas.", c.display());
+            return 1;
+        }
+    }
     let ou = args.iter().enumerate()
-        .find(|(i, a)| !a.starts_with("--") && (*i == 0 || args[*i - 1] != "--equipe"))
+        .find(|(i, a)| !a.starts_with("--") && (*i == 0 || !["--equipe", "--code"].contains(&args[*i - 1].as_str())))
         .map(|(_, a)| PathBuf::from(a))
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
@@ -230,9 +252,19 @@ pub fn main(args: &[String]) -> i32 {
         ("stack.md", "Stack", "outils, versions et commandes de ce projet"),
         ("rules.md", "Règles", "invariants et limites propres au projet"),
     ] {
-        let c = format!("# {titre}\n\n## À REMPLIR\n\nDécrire les {description}, après lecture du projet.\n");
+        let mut c = format!("# {titre}\n\n");
+        if f == "architecture.md" {
+            if let Some(code) = &code { c.push_str(&section_code(code)); }
+        }
+        c.push_str(&format!("## À REMPLIR\n\nDécrire les {description}, après lecture du projet.\n"));
         rap.pose(fact.join(f), description, &c);
         ecrits.push((fact.join(f), c));
+    }
+    if let Some(c) = &code {
+        if fact.join("architecture.md").exists() {
+            rap.main.push(format!("brain/fact/architecture.md existe : y ajouter à la main la section \
+« Le code : `{}` »", c.display()));
+        }
     }
 
     if equipe.is_empty() {
@@ -369,6 +401,39 @@ mod essais {
         let _ = std::process::Command::new("git").args(["init", "-q", "-b", "main"])
             .current_dir(&d).output();
         d
+    }
+
+    /// UN CODE QUI VIT AILLEURS : son adresse entre dans les faits, rien n'entre
+    /// dans son dossier, et un chemin inexistant est refusé.
+    #[test]
+    fn le_code_externe_est_reference_sans_y_ecrire() {
+        let d = bac("code-externe");
+        let code = std::env::temp_dir().join(format!("adopte-code-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&code);
+        std::fs::create_dir_all(code.join("src")).unwrap();
+        std::fs::write(code.join("src/main.py"), "print(1)\n").unwrap();
+        assert_eq!(main(&[d.display().to_string(), "--code".into(), code.display().to_string(), "--go".into()]), 0);
+        let archi = std::fs::read_to_string(d.join("brain/fact/architecture.md")).unwrap();
+        assert!(archi.contains(&format!("## Le code : `{}`", code.display())), "{archi}");
+        let e = crate::briefing::etablissements(&archi);
+        assert!(e.iter().any(|x| x.titre.starts_with("Le code") && x.niveau == "dit"), "ligne d'établissement lisible");
+        let dans_le_code: Vec<_> = walk(&code);
+        assert_eq!(dans_le_code, vec![code.join("src").join("main.py")], "rien n'est écrit dans le code");
+        // TÉMOIN : un dossier de code inexistant est refusé, rien n'est posé.
+        let d2 = bac("code-absent");
+        assert_eq!(main(&[d2.display().to_string(), "--code".into(), code.join("nulle-part").display().to_string(), "--go".into()]), 1);
+        assert!(!d2.join("brain").exists());
+        for x in [&d, &d2, &code] { let _ = std::fs::remove_dir_all(x); }
+    }
+
+    fn walk(d: &Path) -> Vec<PathBuf> {
+        let mut out = vec![];
+        for e in std::fs::read_dir(d).unwrap().flatten() {
+            let p = e.path();
+            if p.is_dir() { out.extend(walk(&p)); } else { out.push(p); }
+        }
+        out.sort();
+        out
     }
 
     /// LA MÉTHODE COPIÉE NOMME `@user` QUAND L'ATELIER LE CONNAÎT, et ne laisse

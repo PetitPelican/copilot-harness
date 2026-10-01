@@ -133,12 +133,27 @@ absolu de l'atelier.
 
 ## Adopter un projet existant
 
-Depuis la racine Git du projet :
+Le projet agentique se tient dans l'atelier : un dossier sous sa racine, avec
+son propre dépôt Git, qui porte les rôles, `brain/` et `docs/`. Depuis ce
+dossier :
 
 ```powershell
 C:\Tools\harnais-copilot\bin\harnais.cmd adopte
 C:\Tools\harnais-copilot\bin\harnais.cmd adopte --go
 ```
+
+Quand le code existe déjà ailleurs, il reste à sa place et ne reçoit aucun
+fichier ; `--code` en garde l'adresse dans `brain/fact/architecture.md`, et le
+briefing la remontre à chaque session :
+
+```powershell
+git init
+C:\Tools\harnais-copilot\bin\harnais.cmd adopte --code "D:\depots\mon-code" --go
+```
+
+En CLI, `copilot --add-dir "D:\depots\mon-code"` donne à une session ouverte
+dans le projet l'accès au code. Adopter directement le dépôt du code reste
+possible, si c'est ce qu'on veut : lancer `adopte` depuis sa racine Git.
 
 Les quatre fichiers de faits, l'état et les tâches sont complétés sans
 écraser l'existant. Les réglages du plugin sont fusionnés dans

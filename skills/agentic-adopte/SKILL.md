@@ -22,7 +22,16 @@ déjà monté n'est pas un outil, c'est un savoir-faire.
 harnais adopte                     # dit ce qu'il poserait, n'écrit rien
 harnais adopte --go                # écrit
 harnais adopte --equipe PO,QA,OPS --go
+harnais adopte --code "<chemin du code>" --go   # code existant ailleurs
 ```
+
+**Le projet agentique se tient dans l'atelier.** Quand le code existe déjà
+ailleurs — un autre dépôt, ou un sous-dossier d'un dépôt plus large —, on
+n'adopte pas ce dépôt : on crée le dossier du projet sous la racine de
+l'atelier, on y fait `git init`, et on l'adopte avec `--code`. Le chemin du code
+entre dans `brain/fact/architecture.md` (section « Le code »), que le briefing
+remontre à chaque session ; rien n'est écrit dans le dossier du code. Adopter
+le dépôt du code lui-même ne se fait que si @user le demande expressément.
 
 Le programme est celui du paquet — le briefing d'un projet sans mémoire en donne
 le chemin exact, parce qu'il change à chaque version et qu'un mode d'emploi faux

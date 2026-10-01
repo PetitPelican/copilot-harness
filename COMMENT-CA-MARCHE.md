@@ -317,6 +317,17 @@ Le mécanisme de déduplication évite deux injections identiques dans une
 session ; une nouvelle session reçoit encore l'accueil tant que le registre
 est vide. Après une adoption réussie, une entrée valide contient `name`,
 `path` et une liste `profiles` parmi OPS/PO/QA : l'accueil s'arrête.
+
+Pendant l'accueil, les gardes de **forme** de fin de tour (B8 forme des
+questions, B10 relecture des rechutes, B13 questions à poser) et le dépôt au
+relecteur se taisent : les questions de cadrage (« nouveau ou existant ? »)
+n'ont ni conséquences chiffrées ni critère « fini quand ». Les gardes d'état
+restent armées.
+
+Le projet agentique se crée sous la racine de l'atelier, avec son propre dépôt.
+Un code qui existe ailleurs y reste : `harnais adopte --code "<chemin>"` en
+inscrit l'adresse dans `brain/fact/architecture.md`, sans rien écrire dans le
+dossier du code.
 Un registre invalide produit une erreur explicite.
 
 Le CTO termine sa mémoire, demande nouveau/existant et emplacement, présente

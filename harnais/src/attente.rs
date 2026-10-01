@@ -1869,6 +1869,13 @@ pub fn main(entree: &str) {
     // d'ÉTAT (todo, carnet, faits, réponses du commanditaire) renvoient
     // toujours : elles se satisfont en travaillant, pas en réécrivant.
     let deja_renvoye = repart_sur_un_renvoi(&data);
+    // L'ACCUEIL DU CTO N'EST PAS UN PROJET EN COURS. Tant que son registre est
+    // vide, ses questions sont du cadrage (« nouveau ou existant ? ») : exiger
+    // conséquences, critère « fini quand » et relecture des rechutes n'y produit
+    // que des messages bureaucratiques. Les gardes de FORME s'y taisent, comme
+    // après un renvoi ; les gardes d'ÉTAT restent armées.
+    let accueil = matches!(crate::atelier::accueil(&racine), Ok(Some(_)));
+    let forme_muette = deja_renvoye || accueil;
     // LE CANAL NOTION, OPTIONNEL. Posé par projet, dans les
     // réglages des agents : `HARNAIS_CANAL=notion`. Alors plus rien ne part vers
     // les Rappels ni n'en est lu, et chaque question pour le commanditaire doit
@@ -2382,7 +2389,7 @@ et continue ton travail.\n\nJe te le redirai dans {} cycles si rien ne bouge.",
         deja.sort_by(|a, b| a.0.cmp(&b.0));
         let _ = std::fs::write(&vus_f, deja.iter()
             .map(|(h, n)| format!("{} {}", h, n)).collect::<Vec<_>>().join("\n"));
-        if n_mauvais > 0 && !deja_renvoye {
+        if n_mauvais > 0 && !forme_muette {
             sortie(2, Some(format!(
 "attente : {} ligne(s) qui attend(ent) @user sont écrites comme des \
 CONSTATS, pas comme des questions : {}.\n\nUn constat lui laisse tout le travail \
@@ -2437,7 +2444,7 @@ permanent.", n_mauvais, ech)),
             let mut tout: Vec<String> = deja.into_iter().chain(h_neufs).collect();
             tout.sort(); tout.dedup();
             let _ = std::fs::write(&f_rech, tout.join("\n"));
-            if declenche && faits < RECHUTES_MAX && !deja_renvoye {
+            if declenche && faits < RECHUTES_MAX && !forme_muette {
                 let _ = std::fs::write(&f_cpt, (faits + 1).to_string());
                 let n = if neufs > 0 { neufs } else { ecrites.len() };
                 sortie(2, Some(format!(
@@ -2517,7 +2524,7 @@ points-là.", n, liste)),
         .map(|e| e.path().extension().map(|x| x == "demande").unwrap_or(false))
         .unwrap_or(false)).count()).unwrap_or(0);
     let mut deposes: Vec<String> = Vec::new();
-    if en_attente < 20 {          // le juge est borné ; la file d'attente aussi
+    if en_attente < 20 && !accueil {  // le juge est borné ; la file d'attente aussi
         let _ = std::fs::create_dir_all(&dep);
         for t in &attente {
             // ON NE DÉPOSE QUE CE QUI AFFIRME QUELQUE CHOSE. Une question
@@ -2828,7 +2835,7 @@ une seule règle.", tombes.len(), liste)),
             let message = dernier_message(&data);
             let a_poser: Vec<&Att> = if premiere { Vec::new() } else {
                 neuves.into_iter().filter(|t| !posee(&message, &t.titre)).collect() };
-            if !a_poser.is_empty() && !deja_renvoye {
+            if !a_poser.is_empty() && !forme_muette {
                 let liste = a_poser.iter().take(4)
                     .map(|t| format!("  · {}", t.titre)).collect::<Vec<_>>().join("\n");
                 let reste = if a_poser.len() > 4 {

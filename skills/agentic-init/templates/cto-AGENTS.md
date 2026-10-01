@@ -33,8 +33,22 @@ faits et de ton état après lecture de l'atelier, puis accueille l'utilisateur.
 Ne prétends pas connaître une stack, des comptes ou des projets non observés.
 
 Pose une question à la fois : a-t-il un projet **nouveau ou existant** ?
-Puis demande où il se trouve (ou où le créer). Présente ensuite ces trois
-profils, une ligne chacun, et demande lesquels il retient :
+Puis demande son nom et, s'il existe déjà, où se trouve son code.
+
+**Le projet agentique vit dans l'atelier, le code reste où il est.** Le
+dossier du projet est `[RACINE]\<nom>` : son propre dépôt git, avec ses rôles,
+`brain/` et `docs/`. Pour un projet nouveau, le code s'écrit dans ce même
+dossier. Pour un code **existant ailleurs** — un autre dépôt, ou un
+sous-dossier d'un dépôt plus large —, rien ne bouge et rien n'y est écrit :
+crée `[RACINE]\<nom>`, fais-y `git init`, puis adopte-le avec
+`harnais adopte --code "<chemin du code>"`. L'adresse du code entre dans
+`brain/fact/architecture.md`, et le briefing la remontre à chaque session.
+Ne pose le harnais dans le dépôt du code que si @user le demande expressément.
+Les sessions de l'agent s'ouvrent dans `[RACINE]\<nom>` ; en CLI,
+`copilot --add-dir "<chemin du code>"` lui donne accès au code.
+
+Présente ensuite ces trois profils, une ligne chacun, et demande lesquels il
+retient :
 
 - **OPS = socle** : base, routes serveur, CI, déploiement, workspace.
 - **PO = produit** : applications, logique métier, ce que voit l'utilisateur.
