@@ -1,0 +1,9 @@
+{
+  "name": "harnais",
+  "description": "Le harnais de l'atelier : mémoire qui vieillit, questions qui remontent au commanditaire, gardes de fin de tour, et une liste de contrôle rejouée avant d'affirmer.",
+  "version": "0.14.5",
+  "author": {
+    "name": "PetitPelican"
+  },
+  "hooks": "hooks/copilot.json"
+}

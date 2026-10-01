@@ -1,0 +1,25 @@
+#!/bin/sh
+# LA COMMANDE `harnais` — celle que les fiches et les messages font taper.
+#
+# Les fiches et les messages des hooks citent `harnais menage`, `harnais adopte`,
+# `harnais equipe`… : sans ce lanceur, seuls `harnais-darwin-arm64` et
+# `harnais-windows-x86_64.exe` existeraient, et chaque citation rendrait
+# « commande introuvable ». Un chemin annoncé doit s'ouvrir.
+#
+# Un lanceur et pas un binaire au nom nu : sous Windows, Git Bash pourrait
+# prendre un fichier sans extension pour le programme. Et la cause d'un échec
+# se dit : un paquet abîmé se répare, une machine non couverte, jamais.
+d=$(dirname "$0")
+m="$(uname -s 2>/dev/null)-$(uname -m 2>/dev/null)"
+case "$m" in
+  Darwin-arm64) b="$d/harnais-darwin-arm64" ;;
+  MINGW*|MSYS*|CYGWIN*) b="$d/harnais-windows-x86_64.exe" ;;
+  *) b="" ;;
+esac
+if [ -n "$b" ] && [ -x "$b" ]; then exec "$b" "$@"; fi
+if [ -z "$b" ]; then
+  echo "harnais : cette machine ($m) n'est pas couverte — le paquet ne livre que macOS Apple Silicon et Windows x86_64. Aucune mise a jour n'y changera rien." >&2
+else
+  echo "harnais : le programme du paquet manque dans $d — remettre le paquet en etat : copilot plugin update harnais@atelier-copilot" >&2
+fi
+exit 127

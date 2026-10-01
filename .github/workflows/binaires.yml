@@ -1,0 +1,54 @@
+name: binaires
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['main']
+    tags: ['v*']
+  pull_request:
+    branches: ['main']
+
+permissions:
+  contents: read
+
+jobs:
+  construire:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - machine: macos-14
+            cible: aarch64-apple-darwin
+            nom: darwin-arm64
+          - machine: windows-latest
+            cible: x86_64-pc-windows-msvc
+            nom: windows-x86_64
+    runs-on: ${{ matrix.machine }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: cible native et dependances verrouillees
+        shell: bash
+        working-directory: harnais
+        run: |
+          rustup target add '${{ matrix.cible }}'
+          cargo fetch --locked --target '${{ matrix.cible }}'
+      - name: controles du conditionnement
+        run: python -m unittest discover -s scripts -p test_package_release.py -v
+      - name: tester construire verifier et assembler localement
+        shell: bash
+        run: python scripts/package_release.py --target '${{ matrix.cible }}'
+      - name: controles Windows du programme construit
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & .\controles\portable-smoke.ps1 -Executable .\harnais\target\x86_64-pc-windows-msvc\release\harnais.exe
+      - uses: actions/upload-artifact@v5
+        with:
+          name: harnais-${{ matrix.nom }}
+          path: |
+            release/*.zip
+            release/*.zip.sha256
+          if-no-files-found: error

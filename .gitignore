@@ -1,0 +1,14 @@
+harnais/target/
+__pycache__/
+*.pyc
+
+# Construit sur le Mac par rappels/construire.sh ; livré par la chaîne, pas par git.
+rappels/rappels-darwin-arm64
+/release/
+/.installer-test-output.txt
+/.installer-test-ps51-output.txt
+/.installer-tests-*/
+/.portable-smoke-*/
+/.portable-contract-*/
+/.portable-baseline-home/
+/.cto-start-*/

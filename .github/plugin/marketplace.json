@@ -1,0 +1,14 @@
+{
+  "name": "atelier-copilot",
+  "owner": {
+    "name": "PetitPelican"
+  },
+  "description": "Le harnais portable pour GitHub Copilot CLI : mémoire de projet, gardes et compétences.",
+  "plugins": [
+    {
+      "name": "harnais",
+      "source": "./",
+      "description": "Mémoire de projet, questions au commanditaire, quatorze gardes de fin de tour et relecteur indépendant."
+    }
+  ]
+}
