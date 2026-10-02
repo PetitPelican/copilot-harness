@@ -282,6 +282,29 @@ pas dans chaque dossier d'agent. `harnais agent --session <id> --racine <copie>`
 dit, en lecture seule, quel agent les hooks de cette session ont reconnu et
 pourquoi.
 
+## Travailler à plusieurs agents dans l'app GitHub Copilot
+
+L'app ouvre par défaut chaque conversation dans une **copie de travail isolée**
+(« New worktree ») : un dossier et une branche à part. Pour que OPS, PO et QA
+travaillent dans **le même espace**, sans qu'un tiers intègre leur travail :
+
+1. **Créer une branche `dev`** à partir de `master`, dans le dossier principal du
+   projet, et le laisser dessus : `git switch -c dev`. Commiter les profils
+   `.github/agents/*.agent.md` avant d'ouvrir les conversations.
+2. **Une conversation par agent.** Sous le champ de saisie, « Where to work » :
+   **Current checkout** (et non « New worktree »).
+3. **Dans le menu d'agent** du champ de saisie : `ops`, `po` ou `qa`. Les deux
+   réglages sont indépendants.
+4. **Vérifier** le briefing : `agent : OPS — choisi dans le menu…`, et aucune ligne
+   `lieu : copie de travail`.
+5. **Mettre `master` à jour**, par l'humain, quand aucune conversation n'écrit :
+   `git fetch . dev:master` (refuse si `master` a divergé).
+
+Chaque agent n'écrit que dans son périmètre (sa mémoire, son établi
+`brain\workbench\<nom>\`) ; une écriture hors périmètre est refusée. Les écritures
+par le shell ne sont pas couvertes. La méthode complète, ce qui est mesuré et ce qui
+ne l'est pas : [COMMENT-CA-MARCHE.md](COMMENT-CA-MARCHE.md), section 9.
+
 ## Les messages du harnais dans la conversation
 
 À chaque fin de tour, des gardes du harnais vérifient que le projet est tenu à

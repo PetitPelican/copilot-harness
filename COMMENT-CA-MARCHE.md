@@ -1,8 +1,10 @@
 # Le harnais — comment ça marche
 
 > Pour quelqu'un qui n'a jamais vu ni « boucle agentique » ni « harnais ».
-> Les comportements Copilot cités ici viennent de la documentation officielle
-> ou du CLI 1.0.90-0 ; l'activation effective reste à mesurer sur chaque projet.
+> Les comportements Copilot cités ici viennent de la documentation officielle,
+> du CLI 1.0.90-0 et 1.0.91-1, et de mesures faites dans l'app GitHub Copilot
+> (journaux de session) ; l'activation effective reste à mesurer sur chaque projet.
+> Pour travailler à plusieurs agents dans l'app, voir la section 9.
 
 ---
 
@@ -64,7 +66,8 @@ harnais adopte         # à blanc
 harnais adopte --go    # pose la mémoire et déclare le plugin
 ```
 
-La marketplace locale charge le code **en direct** : `/restart` ou une nouvelle
+L'installation guidée (prompt à coller, prévisualisation, accord explicite) est
+dans le [README](README.md). La marketplace locale charge le code **en direct** : `/restart` ou une nouvelle
 session prend la correction sans `copilot plugin update`. Le paquet est déclaré
 par `enabledPlugins` et résolu par `extraKnownMarketplaces` (marketplace connue)
 ou `~/.copilot/installed-plugins/`. `~/.copilot/plugin-data/atelier-copilot/harnais`
@@ -94,9 +97,9 @@ le risque de double chargement.
 | Événement | Harnais | Sortie décisive |
 |---|---|---|
 | `sessionStart` / `SessionStart` | briefing d'entrée | `additionalContext` |
-| `userPromptTransformed` | traitement du contenu remis au modèle | `modifiedTransformedPrompt` si nécessaire |
+| `userPromptTransformed` | le briefing est injecté à **chaque message**, dans un bloc `<harnais>` du message remis au modèle | `modifiedTransformedPrompt` |
 | `preToolUse` / `PreToolUse` | garde de commit et périmètre d'écriture `Edit|Write` | `permissionDecision: "deny"` + raison |
-| `postToolUse` / `PostToolUse` | journal des commits réussis | résultat / contexte |
+| `postToolUse` / `PostToolUse` | journal des commits réussis ; `lecture` (sur `Read` et `Bash`) crédite les sections de faits lues | résultat / contexte |
 | `agentStop` / `Stop` | quatorze gardes de fin de tour | `{"decision":"block","reason":"…"}` |
 
 Les noms PascalCase reçoivent des champs d'entrée `snake_case` ; les noms camelCase utilisent des champs `camelCase`.
@@ -120,7 +123,7 @@ Le briefing identique est dédupliqué entre `SessionStart` et
 Les faits, l'état, les tâches, les périmètres et le carnet sont comparés par
 leur contenu : un changement réinjecte le contexte au prompt suivant. Un
 changement d'agent dans le menu et une compaction de la conversation le
-réinjectent aussi (section 9).
+réinjectent aussi (section 8).
 Sans identifiant fourni par l'hôte, aucune session n'est assimilée à une autre :
 la déduplication n'est alors pas garantie.
 
@@ -147,6 +150,16 @@ sont posées à l'état du projet. Chacune peut le renvoyer travailler.
 | **B12** | un relecteur indépendant a **contredit** une affirmation qui part vers l'humain |
 | **B13** | une question **nouvelle** pour l'humain est rangée dans la liste sans être posée dans le message de fin de tour |
 | **B14** | sur un projet réglé sur Notion (`HARNAIS_CANAL=notion`) : une question pour l'humain sans le lien de sa ligne dans la base Décisions — et plus rien ne part vers les Rappels |
+
+### Ce que l'humain voit quand une garde bloque
+
+Quand une garde renvoie l'agent au travail, l'app affiche sa raison dans la
+conversation **comme un message de l'utilisateur**, alors qu'il ne l'a pas
+écrit. Depuis 0.18.1, ce message commence par une signature (« rappel automatique
+du harnais, pas écrit par @user »), nomme la garde (`B8-forme`, par exemple) et dit
+en une phrase ce qu'elle a vu. Les exemples qu'il contient sont annoncés comme
+inventés. L'humain n'a rien à faire : l'agent corrige seul. Un test vérifie que
+chaque garde du code a sa phrase en clair.
 
 ### La garde B7, pour comprendre l'esprit
 
@@ -177,7 +190,10 @@ lit jamais comme un constat confirmé.*
 |---|---|---|
 | `brain/fact/` | faits communs du projet | 4 fichiers, 5 en équipe (`roles.md`) |
 | `brain/mind/` | état d'un agent : `state.md`, `todo.md` | 2 fichiers par agent |
-| `docs/` | décisions et traces datées | aucun |
+| `brain/workbench/<nom>/` | ce que chaque agent produit (forme compacte, 0.19) | aucun |
+| `brain/workspace/` | carnet d'équipe, ignoré par Git (seul `.gitkeep` voyage) | aucun |
+| `brain/poids.json` | confiance des sections de faits (voir plus bas) | — |
+| `docs/` | l'archive du projet : décisions, audits, passations, ressources | aucun |
 | `.logs/` | journal de commits append-only | aucun |
 
 `cap:` est dans `brain/fact/base.md`. L'en-tête de `state.md` exige `maj`,
@@ -187,14 +203,17 @@ Ne jamais compresser `todo.md` ou `.logs/` : le programme relit les marqueurs.
 L'ancien rangement `.fact/`/`.mind/` reste lisible ; `brain-migre` le déplace
 sur décision. Un projet qui porte les deux formes ne reçoit aucune mémoire.
 
-Sous Copilot, chaque worktree résout la mémoire de **son propre checkout**,
-pas celle du dépôt principal. Un worktree sans `brain/` reste sans mémoire,
+Sous Copilot, chaque session résout la mémoire de **son propre checkout** : la
+copie de travail quand l'app en crée une (« New worktree »), le dossier principal
+quand elle travaille « dans le checkout existant » (« Current checkout »). La
+mémoire d'une copie ne se replie jamais sur celle du dépôt principal. Un worktree sans `brain/` reste sans mémoire,
 même si le principal en possède une. Le carnet est également local au worktree ;
 partager des changements se fait par Git, pas par une écriture invisible dans
 le checkout d'un autre agent.
 
-L'app Copilot ouvre chaque session dans une telle copie, rangée sous
-`~/.copilot/repos/copilot-worktrees/` : les dossiers voisins de l'agent ne
+Par défaut, l'app Copilot ouvre chaque session dans une telle copie, rangée sous
+`~/.copilot/repos/copilot-worktrees/` (le choix « Where to work » de la section 9
+permet de travailler dans le dossier principal) : les dossiers voisins de l'agent ne
 sont alors pas l'atelier. Le briefing le dit (ligne `lieu`), avec la branche et
 le dépôt principal, et `atelier-monte` écrit dans le rôle du CTO le chemin
 absolu de l'atelier et celui du paquet, pour qu'aucun chemin ne soit déduit du
@@ -248,7 +267,7 @@ et celles qui dorment (30 jours sans lecture, gradués par la nature) ;
 
 ---
 
-## 8. Le relecteur — celui qui n'a pas écrit ce qu'il relit
+## 7. Le relecteur — celui qui n'a pas écrit ce qu'il relit
 
 Le problème est ancien : **celui qui écrit ne peut pas être celui qui juge.**
 Un même contexte qui se relit lui-même n'est pas une relecture, c'est un biais de
@@ -291,50 +310,89 @@ sans rien écrire.**
 
 ---
 
-## 9. Deux formes : un agent, ou une équipe
+## 8. Trois formes de projet : un agent, ou une équipe
 
-En mono : `brain/fact/`, `brain/mind/` et le `AGENTS.md` du projet à la racine
-git. En multi : `brain/fact/` partagé, `brain/mind/<nom>/` pour chacun,
-`agents/<nom>/AGENTS.md` pour son rôle, et `.github/agents/<nom>.agent.md`
-pour son profil. `brain/fact/roles.md` nomme les zones partagées et les
-frontières.
+Un projet est tenu par **un** agent par défaut. Plusieurs agents n'ont de sens
+que pour des lots aux rythmes et aux contextes disjoints (voir `roles.md`), jamais
+« parce que le projet est gros ». Trois rangements existent :
+
+| | Mono | Équipe « dossier » (historique) | Équipe compacte (0.17+, sur choix explicite) |
+|---|---|---|---|
+| Rôle | `AGENTS.md` du projet | `agents/<nom>/AGENTS.md` | `.github/agents/<slug>.agent.md` : profil Copilot **et** rôle |
+| Périmètre d'écriture | — | `agents/<nom>/.github/copilot/perimetre.json` | `.github/copilot/perimetres/<slug>.json` |
+| Ce que l'agent produit | — | `agents/<nom>/livrables/` | `brain/workbench/<nom>/` (depuis 0.19) |
+| État | `brain/mind/` | `brain/mind/<nom>/` | `brain/mind/<nom>/` |
+| L'agent se choisit | — | par le dossier de lancement ou le menu | **par le menu d'agent de l'app** (ou `copilot --agent`) |
+
+La forme compacte se crée avec `harnais adopte --equipe OPS,PO,QA --compact` (projet
+neuf) ou `harnais equipe --agents A,B --compact` (un mono qu'on passe en équipe) ;
+`harnais equipe --compact` exporte une équipe « dossier » existante : à blanc par
+défaut, sans rien déplacer ni supprimer. L'ancienne forme reste prise en charge.
+
+```text
+projet/
+  AGENTS.md                                  méthode et rôle commun du projet
+  .github/agents/<slug>.agent.md             profil Copilot ET rôle de chaque agent
+  .github/copilot/perimetres/<slug>.json     garde d'écriture de chaque agent
+  .github/copilot/settings.json              active le paquet, une fois pour tous
+  brain/fact/                                faits communs (4 fichiers, + roles.md)
+  brain/mind/<nom>/state.md et todo.md       état de chaque agent
+  brain/workbench/<nom>/                     ce que chaque agent produit
+  brain/workspace/                           carnet d'équipe (ignoré par Git)
+  brain/poids.json                           confiance des faits
+  docs/                                      l'archive : décisions, audits, passations
+```
+
+**Les périmètres.** Un fichier `perimetres/<slug>.json` porte une liste `allow`
+(les seuls chemins où l'agent peut écrire) et une liste `deny`, relatives à la
+racine du projet ; `deny` prime. Un périmètre absent ou illisible refuse toute
+écriture. Par défaut, OPS et PO écrivent dans leur mémoire et leur établi. QA, qui
+éprouve sans réparer, écrit dans sa mémoire, son établi et les cinq fichiers de
+faits (`base`, `stack`, `architecture`, `rules`, `roles`), ces derniers après
+validation explicite de l'humain ; le code, la production, les instructions, les
+gardes et les espaces des pairs lui restent interdits. Un commit documentaire de QA
+est permis avec l'état à jour et ` # fact-ok` pour les faits ; jamais ` # mind-ok`.
+La garde ne couvre pas le shell ni les outils MCP.
+
+**L'établi.** `brain/workbench/<nom>/` reçoit les plans, analyses et scripts d'un
+agent. Il est séparé de `docs/`, qui reste l'archive du projet. La garde de commit
+ne le compte pas comme du code : un script SQL livré dans l'établi n'oblige pas à
+mettre l'état à jour (le même fichier hors de l'établi, si). Un projet déjà compact
+qui range ses productions ailleurs garde ses périmètres tels quels : changer de
+dossier est une migration décidée par l'humain, jamais faite par le harnais.
 
 **Qui parle.** L'app Copilot lance chaque conversation à la racine d'une copie
-de travail : le dossier de lancement ne dit plus qui parle. L'agent se choisit
-dans le menu d'agent du champ de saisie, qui liste les profils
+de travail ou du dossier principal : le dossier de lancement ne dit pas qui parle.
+L'agent se choisit dans le menu d'agent du champ de saisie, qui liste les profils
 `.github/agents/` **commités**. Aucun hook ne reçoit ce choix ; Copilot l'écrit
 dans le journal de la session (`~/.copilot/session-state/<id>/events.jsonl`,
-mesuré dans l'app et le CLI 1.0.91-1) : `subagent.selected` avec le nom de
-l'agent, `subagent.deselected` pour « Default agent », avant le premier hook,
-un nouveau à chaque changement par le menu, un nouveau en tête de la session
+écrit en direct, mesuré dans l'app et le CLI 1.0.91-1) : `subagent.selected` avec
+le nom de l'agent, `subagent.deselected` pour « Default agent », avant le premier
+hook, un nouveau à chaque changement par le menu, un nouveau en tête de la session
 qu'ouvre `/clear`, intact après `/compact`. Les sous-agents de l'outil task
-n'y écrivent ni l'un ni l'autre ; leurs événements portent un `agentId` et
-sont ignorés.
+n'y écrivent ni l'un ni l'autre ; leurs événements portent un `agentId` et sont
+ignorés, et ils n'héritent pas du profil.
 
 Chaque hook lit ce journal et applique la règle : l'agent choisi dans le menu
 (ou `copilot --agent <nom>`), sinon le dossier de lancement s'il est dans
 `agents/<nom>/`, sinon **QA** s'il existe — « Default agent » prend QA —, sinon
-aucun agent. Le harnais se place alors dans `agents/<nom>/` de la copie,
-comme si la session y avait été lancée : état, todo, garde de commit,
-périmètre, journal et fin de tour suivent cet agent. Le briefing le dit
+aucun agent. Le harnais se place alors dans le contexte de cet agent (sa
+mémoire `brain/mind/<nom>/`, son périmètre) : état, todo, garde de commit,
+périmètre, journal et fin de tour le suivent. Le briefing le dit
 (`agent : OPS — choisi dans le menu…, ligne 2`) et, quand Copilot ne l'a pas
 chargé, **montre** le rôle : un profil qui demande au modèle de lire
 `AGENTS.md` laisse la lecture à sa bonne volonté — mesuré. `harnais agent
---session <id> --racine <copie>` rejoue la résolution, en lecture seule.
+--session <id> --racine <dossier>` rejoue la résolution, en lecture seule.
 
-`harnais equipe` pose le périmètre de chaque agent dans `agents/<nom>/`, en
-chemins **relatifs à la racine du projet** ; la garde `PreToolUse` du plugin
-en est le lecteur. Elle les pose sur la copie de travail courante, transpose
-les chemins absolus d'avant 0.16.0 qui visaient le dossier principal, et
-interdit aussi ce dossier principal depuis la copie. Un chemin relatif passé à
-un outil se lit depuis le dossier de la session. `harnais equipe --profils`
-met à niveau un projet déjà en équipe. Copilot ignore `permissions.deny` hors
-réglages managés. Les réglages du plugin ne valent qu'à la racine git : le
-paquet s'y active une fois pour tous les agents, et la séparation vient du
-choix d'agent et de la garde, à vérifier par un essai effectif. Sans plugin
-chargé, il n'y a aucune garde. Un agent du projet appelé comme sous-agent
-n'est pas suivi : ses écritures sont jugées sous le périmètre de l'agent de la
-conversation.
+La garde `PreToolUse` du plugin lit les périmètres. Elle les ancre sur le dossier
+de la session : la copie de travail en « New worktree », le dossier principal en
+« Current checkout » ; depuis une copie, elle interdit aussi le dossier principal.
+Un chemin relatif passé à un outil se lit depuis le dossier de la session.
+`harnais equipe --profils` met à niveau un projet déjà en équipe. Copilot ignore
+`permissions.deny` hors réglages managés. Les réglages du plugin ne valent qu'à la
+racine git : le paquet s'y active une fois pour tous les agents, et la séparation
+vient du choix d'agent et de la garde, à vérifier par un essai effectif. Sans plugin
+chargé, il n'y a aucune garde.
 
 Copilot lit `AGENTS.md` et `CLAUDE.md` sans ordre de priorité général : signaler
 un doublon et ne pas laisser des contenus divergents. Copilot ne remonte pas
@@ -345,6 +403,122 @@ le CLI SDK 1.0.90-0 mesuré ne chargeait pas le répertoire supplémentaire.
 La variable reste utile aux hôtes qui la prennent en charge, sans être une
 preuve de chargement. Un bloc de méthode déjà présent est conservé ; sa
 mise à jour doit être réconciliée explicitement avec les règles du projet.
+
+---
+
+## 9. Travailler à plusieurs agents dans l'app GitHub Copilot — la méthode
+
+### 9.1 Le principe
+
+Comme dans une entreprise : **un même espace de travail, des rôles et des
+périmètres différents**. OPS, PO et QA améliorent chacun le même contenu ; aucun ne
+dépend d'un autre agent pour toucher à son propre environnement. Ce qui les sépare :
+leur **profil** (le rôle), leur **périmètre** (ce que la garde les laisse écrire) et
+leur **mémoire** (`brain/mind/<nom>/`). Ce qui les réunit : les faits communs, le
+même dossier, la même branche.
+
+### 9.2 Ce que fait l'app si on ne lui dit rien
+
+Elle ouvre chaque conversation dans une **copie de travail** (« New worktree ») :
+un dossier à part sous `~/.copilot/repos/copilot-worktrees/…` et une branche neuve
+(`workspace_type: worktree` dans les journaux de session). Trois conséquences :
+
+- le travail d'un agent est invisible des autres tant qu'il n'est pas commité puis
+  fusionné ;
+- la garde est ancrée sur la copie : l'agent ne peut pas écrire dans le dépôt
+  principal ;
+- il faut donc un tiers (un autre agent, ou l'humain) pour intégrer le travail —
+  l'inverse d'un espace commun.
+
+Le profil `.github/agents/<nom>.agent.md` règle **qui** parle, pas **où** : il ne
+change rien à la copie.
+
+### 9.3 La méthode retenue
+
+Deux réglages indépendants, et une branche :
+
+1. **Une branche partagée `dev`**, créée à partir de `master` (ou `main`). Les trois
+   agents y travaillent ; `master` reste la version stable, mise à jour par l'humain
+   seul.
+2. **Le dossier principal du projet reste sur `dev`.**
+3. **Chaque conversation d'agent** se règle ainsi, sous le champ de saisie :
+   « Where to work » = **Current checkout** (« Work in the existing checkout ») — et
+   non « New worktree » ; menu d'agent = **ops**, **po** ou **qa**.
+4. **Une conversation par agent.** Plusieurs peuvent tourner en même temps.
+
+### 9.4 Pas à pas
+
+**Mise en place, une fois.** Dans le dossier principal du projet :
+
+```powershell
+git status               # l'arbre doit être propre
+git switch -c dev        # crée dev à partir de la branche courante (master) et passe dessus
+```
+
+Les profils `.github/agents/*.agent.md` doivent être **commités** avant d'ouvrir les
+conversations : une nouvelle conversation part de l'état commité, un profil non
+commité n'apparaît pas dans le menu d'agent.
+
+**Ouvrir la conversation d'un agent** — à refaire pour chaque agent et chaque
+nouvelle conversation :
+
+1. nouvelle conversation sur le projet ;
+2. « Where to work » : **Current checkout** ;
+3. menu d'agent : l'agent voulu ;
+4. envoyer le premier message.
+
+**Vérifier que l'agent est bien servi.** Le briefing du harnais montre
+`agent : OPS — choisi dans le menu d'agent du champ de saisie` et **ne montre pas**
+de ligne `lieu : copie de travail`. `harnais agent --session <id> --racine <dossier>`
+rejoue la résolution. Une écriture hors du périmètre de l'agent est refusée
+(« Écriture refusée hors périmètre autorisé »).
+
+**Mettre `master` à jour**, par l'humain, quand aucune conversation n'écrit :
+
+```powershell
+git fetch . dev:master   # avance master jusqu'à dev, sans quitter dev
+```
+
+La commande refuse si `master` a divergé (elle ne force jamais) ; mesurée sur un
+dépôt de test.
+
+### 9.5 Ce qui est mesuré, ce qui ne l'est pas
+
+Mesuré le 02/10/2026 : trois conversations OPS, PO et QA ouvertes en « Current
+checkout » travaillent dans le dossier principal, sur la même branche, chacune avec
+son rôle (bloc `<agent_instructions>` présent) ; chacune écrit dans son établi ;
+une écriture d'OPS dans l'établi de PO est refusée par la garde.
+
+**Pas couvert, ou pas mesuré :**
+
+- les écritures par le shell (PowerShell) ne passent pas par la garde ;
+- les commits : chaque agent doit n'ajouter que ses propres chemins. Un commit
+  fait avec le message par défaut « Save uncommitted changes » a pris tous les
+  fichiers modifiés du dossier, ceux de plusieurs agents compris (observé). Deux
+  commits simultanés peuvent se bloquer un instant (non mesuré) ;
+- l'app retient-elle « Current checkout » d'une conversation à l'autre : non mesuré,
+  à vérifier à chaque nouvelle conversation ;
+- `/agent` tapé en cours de conversation : non mesuré (le menu, lui, est mesuré).
+
+**Pièges :**
+
+- ouvrir une conversation en « New worktree » par habitude : l'agent travaille alors
+  dans une copie isolée, partant de `master` et non de `dev` (choisir `dev` comme
+  « Base branch » si on s'y résout) ;
+- changer la branche du dossier principal pendant que des conversations écrivent ;
+- ouvrir une conversation avant d'avoir commité les profils ;
+- « Default agent » : c'est QA qui tient la session (lecture et production
+  documentaire), pas un agent « neutre ».
+
+### 9.6 Dans une conversation
+
+- `/compact` : l'agent est conservé (mesuré ; le choix reste dans le journal).
+- `/clear` : ouvre une nouvelle session où l'agent est conservé (déduit : la commande
+  elle-même ne laisse aucun événement).
+- Changer d'agent par le menu : un `subagent.deselected` ou `subagent.selected`
+  apparaît dans le journal ; le contexte de l'agent change au message suivant.
+- Une nouvelle conversation démarre avec l'agent précédent (vu au démarrage de la
+  session) : ne pas s'y fier sans lire le briefing.
 
 ---
 
@@ -509,6 +683,9 @@ Dire ce qu'un système ne couvre pas vaut mieux que de le laisser découvrir.
   travail et sur ce qui part vers l'humain, pas sur l'architecture.
 - **Ça ne rattrape pas un mauvais découpage des rôles.** Un projet mal découpé
   produit trois agents qui se marchent dessus, harnais ou pas.
+- **Ça ne choisit pas où l'app ouvre une conversation.** Le dossier de travail
+  (copie isolée ou dossier principal) est un réglage de l'utilisateur, conversation
+  par conversation ; le harnais le **dit** dans le briefing, il ne le change pas.
 - **Le canal vers le téléphone est propre à une plateforme.** Ailleurs, la
   capacité est absente — et le harnais **le dit** plutôt que de se taire.
 
