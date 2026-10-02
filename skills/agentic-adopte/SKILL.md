@@ -61,7 +61,7 @@ QA a un périmètre documentaire positif : mémoire et livrables propres,
 cinq fichiers de faits sur accord humain. Les autres périmètres protègent les mémoires et
 livrables des pairs et les configurations communes, mais restent à compléter
 pour le code propre au projet. Les livrables sont prévus sous
-`docs/livrables/<nom>/` ; aucun dossier `agents/` n'est créé.
+`brain/workbench/<nom>/` ; aucun dossier `agents/` n'est créé.
 Une équipe historique se migre par `equipe --compact`, pas par une adoption
 qui écraserait ses personnalisations.
 

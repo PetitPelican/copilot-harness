@@ -148,6 +148,12 @@ pub fn est_du_code(f: &str, lot: &str, projet: &str) -> bool {
             return false;
         }
     }
+    // Ce que produisent les agents (`brain/workbench/<nom>/`) n'est pas du code
+    // projet, comme `docs/` : un script SQL livré ici ne réclame pas l'état à jour.
+    let banc = format!("{}/", crate::agent::BANC);
+    if f.starts_with(&format!("{}{}", lot, banc)) || f.starts_with(&format!("{}{}", projet, banc)) {
+        return false;
+    }
     if f.starts_with(&format!("{}site/", projet))
         && !f.starts_with(&format!("{}site/_content/", projet)) {
         return false;   // moteur / rendu généré du site de doc
@@ -563,5 +569,11 @@ mod essais {
         assert!(!est_du_code("site/index.html", "", ""), "rendu généré");
         assert!(est_du_code("site/_content/a.py", "", ""), "mais son contenu, si");
         assert!(!est_du_code("LISEZMOI.md", "", ""));
+        // Ce que produit un agent n'est pas du code projet, quel que soit son format…
+        assert!(!est_du_code("brain/workbench/OPS/requete.sql", "", ""));
+        assert!(!est_du_code("brain/workbench/PO/analyse.ipynb", "", ""));
+        // …mais le même fichier hors du banc, si.
+        assert!(est_du_code("src/requete.sql", "", ""));
+        assert!(est_du_code("brain/requete.sql", "", ""), "le reste de brain/ n'est pas exempté");
     }
 }

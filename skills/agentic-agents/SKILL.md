@@ -41,12 +41,12 @@ sont la même opération à une étape près.
 **Architecture compacte (0.17.0, opt-in).** `.github/agents/<slug>.agent.md`
 porte le profil ET le rôle ; `.github/copilot/perimetres/<slug>.json` porte
 la garde. La mémoire reste `brain/mind/<nom>/`, les livrables vont dans
-`docs/livrables/<nom>/`. Aucun dossier `agents/<nom>/` n'est nécessaire.
+`brain/workbench/<nom>/`. Aucun dossier `agents/<nom>/` n'est nécessaire.
 Le choix dans le menu résout l'identité ; le contexte interne des hooks pointe
 vers la mémoire de cet agent, sans changer le cwd réel de Copilot.
 Un périmètre compact absent ou illisible refuse les écritures de fichiers.
 En compact, `allow` est obligatoire : par défaut mémoire propre et
-`docs/livrables/<nom>/`. QA reçoit aussi les cinq chemins exacts de faits,
+`brain/workbench/<nom>/`. QA reçoit aussi les cinq chemins exacts de faits,
 à modifier uniquement sur validation humaine. `deny` prime. Les chemins de code
 autorisés se déclarent après arbitrage humain, jamais implicitement.
 À l'export, le refus historique de tout `docs/` est remplacé par cette liste
@@ -63,7 +63,7 @@ harnais equipe --agents OPS,PO --compact --project-root C:\Atelier\Projet
 L'export affiche le contenu complet, conserve les personnalisations des profils
 et fusionne leur rôle historique dans un bloc délimité. Il ne déplace ni mémoire,
 ni documents, ni anciens dossiers. Il remplace les références des rôles exportés
-à `agents/<nom>/livrables` par `docs/livrables/<nom>` : la migration des livrables
+à `agents/<nom>/livrables` par `brain/workbench/<nom>` : la migration des livrables
 et des références communes est séparée et nécessite l'accord humain.
 Relire le profil fusionné. Valider les nouvelles sessions, puis seulement
 archiver/retirer les anciens dossiers sur accord. Les deux formes restent lues.

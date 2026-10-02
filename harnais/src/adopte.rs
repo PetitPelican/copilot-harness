@@ -302,10 +302,10 @@ Lis brain/mind/{a}/state.md et brain/mind/{a}/todo.md à la reprise.\n\n\
                 if !a.eq_ignore_ascii_case("QA") { denies.push("brain/fact".into()); }
                 for n in equipe.iter().filter(|n| *n != a) {
                     denies.push(format!("brain/mind/{n}"));
-                    denies.push(format!("docs/livrables/{n}"));
+                    denies.push(crate::agent::banc(n));
                 }
                 let allow = crate::equipe::allow_par_defaut(a, "brain/fact",
-                    &format!("brain/mind/{a}"), &format!("docs/livrables/{a}"));
+                    &format!("brain/mind/{a}"), &crate::agent::banc(a));
                 let c = serde_json::json!({"allow": allow, "deny": denies}).to_string() + "\n";
                 rap.pose(garde.clone(), &format!("périmètre centralisé de {a}"), &c);
                 ecrits.push((garde, c));

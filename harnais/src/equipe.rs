@@ -80,7 +80,7 @@ fn profil_role(p: &Path, n: &str, appliquer: bool, rap: &mut Vec<(String, String
     if f.exists() {
         return Err(format!("{} existe déjà ; réconcilier le rôle avant de créer cet agent", f.display()));
     }
-    rap.push(("+".into(), format!("{} — profil et rôle uniques ; livrables dans docs/livrables/{n}/", rel(p, &f))));
+    rap.push(("+".into(), format!("{} — profil et rôle uniques ; livrables dans brain/workbench/{n}/", rel(p, &f))));
     if appliquer {
         let texte = format!("---\nname: {}\ndescription: Agent {n} — rôle propre au projet\n---\n\
 Lis brain/mind/{n}/state.md et brain/mind/{n}/todo.md à la reprise. \
@@ -198,7 +198,7 @@ fn perimetre_agent(cible: &Path, projet: &Path, autres: &[String],
     let perimetre = if est_compact {
         for a in autres {
             denies.push(format!("brain/mind/{a}"));
-            denies.push(format!("docs/livrables/{a}"));
+            denies.push(crate::agent::banc(a));
         }
         denies.extend([".github", "brain/poids.json"].map(String::from));
         if !nom(cible).eq_ignore_ascii_case("QA") { denies.push("brain/fact".into()); }
@@ -209,7 +209,7 @@ fn perimetre_agent(cible: &Path, projet: &Path, autres: &[String],
         denies.extend([".github", "brain/poids.json"].map(String::from));
         for a in autres {
             denies.push(format!("brain/mind/{a}"));
-            denies.push(format!("docs/livrables/{a}"));
+            denies.push(crate::agent::banc(a));
         }
     }
     if perimetre.exists() {
@@ -242,7 +242,7 @@ fn perimetre_agent(cible: &Path, projet: &Path, autres: &[String],
             let cerveau = projet.join("brain/fact").is_dir();
             let fact = if cerveau { "brain/fact" } else { ".fact" };
             let mind = if cerveau { format!("brain/mind/{n}") } else { format!("agents/{n}/.mind") };
-            let livrables = if est_compact { format!("docs/livrables/{n}") } else { format!("agents/{n}/livrables") };
+            let livrables = if est_compact { crate::agent::banc(&n) } else { format!("agents/{n}/livrables") };
             garde["allow"] = json!(allow_par_defaut(&n, fact, &mind, &livrables));
         }
         if !perimetre.exists() || garde != avant {
@@ -616,7 +616,7 @@ mod essais {
         assert!(crate::agent::profil(&p, "OPS").is_file());
         let qa = p.join("brain/mind/QA");
         assert!(!crate::copilot::lis_deny(&qa).unwrap().contains(&PathBuf::from(".")));
-        for f in ["brain/fact/base.md", "brain/mind/QA/todo.md", "docs/livrables/QA/plan.md"] {
+        for f in ["brain/fact/base.md", "brain/mind/QA/todo.md", "brain/workbench/QA/plan.md"] {
             assert!(crate::copilot::decision(&json!({"tool_name":"Write","tool_input":{"file_path":p.join(f)}}), &qa).unwrap().is_none(), "{f}");
         }
         for f in ["brain/fact/autre.md", "brain/fact/base.md/code.py", "brain/mind/OPS/todo.md", "docs/audit/a.md", "src/a.rs", ".env", ".github/agents/qa.agent.md"] {
@@ -626,7 +626,7 @@ mod essais {
             "PO".into(), "--apply".into()]), 0);
         assert!(!p.join("agents").exists(), "ajout conserve la forme compacte");
         assert!(crate::agent::profil(&p, "PO").is_file());
-        assert!(crate::copilot::lis_deny(&p.join("brain/mind/OPS")).unwrap().contains(&PathBuf::from("docs/livrables/PO")));
+        assert!(crate::copilot::lis_deny(&p.join("brain/mind/OPS")).unwrap().contains(&PathBuf::from("brain/workbench/PO")));
         std::fs::remove_dir_all(&p).unwrap();
     }
 

@@ -219,7 +219,7 @@ try {
             Assert ($compactBrief -notmatch 'ROLE-OPS-TEST') 'role du menu recopie par le briefing'
             $compactWrite = @{ cwd = $session; sessionId = 'app-compact'; toolName = 'create'; toolArgs = @{ path = 'brain/mind/QA/todo.md' } }
             Assert (((Hook 'perimetre' $compactWrite | ConvertFrom-Json).permissionDecision) -eq 'deny') 'garde compacte laisse passer chez QA'
-            $compactWrite.toolArgs.path = 'docs/livrables/OPS/permis.md'
+            $compactWrite.toolArgs.path = 'brain/workbench/OPS/permis.md'
             Assert ((Hook 'perimetre' $compactWrite) -eq '') 'garde compacte refuse les livrables OPS'
             [IO.File]::AppendAllText($compactJournal, '{"type":"subagent.deselected","data":{}}' + "`n")
             $compactPrompt = @{ sessionId = 'app-compact'; cwd = $session; prompt = 'x'; transformedPrompt = 'x' }
@@ -228,12 +228,12 @@ try {
             $compactWrite.toolArgs.path = 'brain/mind/QA/todo.md'
             Assert ((Hook 'perimetre' $compactWrite) -eq '') 'QA documentaire ne peut tenir sa memoire'
             foreach ($path in @('brain/fact/base.md', 'brain/fact/stack.md', 'brain/fact/architecture.md',
-                'brain/fact/rules.md', 'brain/fact/roles.md', 'docs/livrables/QA/plan.md')) {
+                'brain/fact/rules.md', 'brain/fact/roles.md', 'brain/workbench/QA/plan.md')) {
                 $compactWrite.toolArgs.path = $path
                 Assert ((Hook 'perimetre' $compactWrite) -eq '') "QA documentaire refuse $path"
             }
             foreach ($path in @('brain/fact/extra.md', 'src/code.py', '.env', 'docs/audit/source.md',
-                'brain/mind/OPS/todo.md', 'docs/livrables/OPS/a.md', '.github/agents/qa.agent.md')) {
+                'brain/mind/OPS/todo.md', 'brain/workbench/OPS/a.md', '.github/agents/qa.agent.md')) {
                 $compactWrite.toolArgs.path = $path
                 Assert (((Hook 'perimetre' $compactWrite | ConvertFrom-Json).permissionDecision) -eq 'deny') "QA documentaire autorise $path"
             }

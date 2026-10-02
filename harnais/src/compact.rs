@@ -72,7 +72,7 @@ fn prepare(p: &Path) -> Result<Vec<(PathBuf, String)>, String> {
         let mut texte = texte.replace(&format!("agents/{n}/AGENTS.md"), &relatif(&profil, &racine))
             .replace(&format!("agents/{n}/CLAUDE.md"), &relatif(&profil, &racine));
         for a in &noms {
-            texte = texte.replace(&format!("agents/{a}/livrables"), &format!("docs/livrables/{a}"));
+            texte = texte.replace(&format!("agents/{a}/livrables"), &crate::agent::banc(a));
         }
         let garde = crate::agent::perimetre_compact(&racine, n);
         let source = if garde.exists() { garde.clone() }
@@ -97,7 +97,7 @@ fn prepare(p: &Path) -> Result<Vec<(PathBuf, String)>, String> {
             if (normalise != "docs" || garde.exists()) && !deny.contains(&normalise) { deny.push(normalise); }
         }
         for a in noms.iter().filter(|a| *a != n) {
-            for interdit in [format!("brain/mind/{a}"), format!("docs/livrables/{a}")] {
+            for interdit in [format!("brain/mind/{a}"), crate::agent::banc(a)] {
                 if !deny.contains(&interdit) { deny.push(interdit); }
             }
         }
@@ -111,12 +111,12 @@ fn prepare(p: &Path) -> Result<Vec<(PathBuf, String)>, String> {
                 let liste = allow.as_array().ok_or("allow doit être une liste")?;
                 let chemins = liste.iter().map(|x| {
                     let x = x.as_str().filter(|s| !s.trim().is_empty()).ok_or("allow doit contenir des chemins non vides")?;
-                    Ok(x.replace(&format!("agents/{n}/livrables"), &format!("docs/livrables/{n}")))
+                    Ok(x.replace(&format!("agents/{n}/livrables"), &crate::agent::banc(n)))
                 }).collect::<Result<Vec<_>, &str>>()?;
                 v["allow"] = json!(chemins);
             } else {
                 v["allow"] = json!(crate::equipe::allow_par_defaut(n, "brain/fact",
-                    &format!("brain/mind/{n}"), &format!("docs/livrables/{n}")));
+                    &format!("brain/mind/{n}"), &crate::agent::banc(n)));
             }
         } else {
             crate::copilot::lis_allow(&crate::agent::contexte(&racine, n))?;
@@ -138,7 +138,7 @@ pub fn main(p: &Path, appliquer: bool) -> i32 {
         println!("\n── {} ──\n{texte}", f.display());
     }
     println!("Les mémoires, docs et anciens dossiers agents/ restent INCHANGÉS. \
-Les rôles exportés utilisent docs/livrables/<nom>/ : déplacer les livrables et \
+Les rôles exportés utilisent brain/workbench/<nom>/ : déplacer les livrables et \
 réconcilier les références communes séparément, après accord. \
 Les périmètres centralisés deviennent prioritaires. Ne retirer agents/ \
 qu'après validation des profils, mémoires et gardes dans une nouvelle session.");
@@ -216,7 +216,7 @@ mod tests {
         assert_eq!(main(&p, true), 0);
         let contexte = crate::agent::contexte(&p, "QA");
         let ecrit = |f: &str| crate::copilot::decision(&json!({"tool_name":"Write","tool_input":{"file_path":p.join(f)}}), &contexte);
-        for f in ["brain/fact/base.md", "brain/mind/QA/todo.md", "docs/livrables/QA/plan.md"] {
+        for f in ["brain/fact/base.md", "brain/mind/QA/todo.md", "brain/workbench/QA/plan.md"] {
             assert!(ecrit(f).unwrap().is_none(), "{f}");
         }
         for f in ["brain/fact/rules.md", "brain/fact/extra.md", "src/code.py", ".github/agents/qa.agent.md"] {
@@ -242,8 +242,8 @@ mod tests {
             std::fs::write(crate::agent::profil(&p, n),
                 format!("---\nname: {}\n---\nRÔLE-{n}\n", crate::agent::nom_de_profil(n))).unwrap();
             std::fs::write(crate::agent::perimetre_compact(&p, n),
-                json!({"allow": if n == "QA" { vec![] } else { vec!["brain/mind/OPS","docs/livrables/OPS"] },
-                    "deny": if n == "QA" { vec!["."] } else { vec!["brain/fact","brain/mind/QA","docs/livrables/QA"] }}).to_string()).unwrap();
+                json!({"allow": if n == "QA" { vec![] } else { vec!["brain/mind/OPS","brain/workbench/OPS"] },
+                    "deny": if n == "QA" { vec!["."] } else { vec!["brain/fact","brain/mind/QA","brain/workbench/QA"] }}).to_string()).unwrap();
         }
         let lecture = crate::agent::Lecture { choix: crate::agent::Choix::Agent { nom: "ops".into(), ligne: 1 },
             ..crate::agent::Lecture::vide() };
@@ -261,16 +261,16 @@ mod tests {
         let ecrit = |n: &str, f: &str| crate::copilot::decision(
             &json!({"tool_name":"Write", "tool_input":{"file_path":p.join(f)}}),
             &crate::agent::contexte(&p, n));
-        assert!(ecrit("OPS", "docs/livrables/OPS/a.md").unwrap().is_none());
+        assert!(ecrit("OPS", "brain/workbench/OPS/a.md").unwrap().is_none());
         assert!(ecrit("OPS", "docs/audit/a.md").unwrap().is_some());
         assert!(ecrit("OPS", "code.py").unwrap().is_some());
         assert!(ecrit("OPS", "brain/mind/OPS/todo.md").unwrap().is_none());
         assert!(ecrit("OPS", "brain/mind/QA/todo.md").unwrap().is_some());
         let ops_garde = crate::agent::perimetre_compact(&p, "OPS");
         std::fs::write(&ops_garde, r#"{"deny":[]}"#).unwrap();
-        assert!(ecrit("OPS", "docs/livrables/OPS/a.md").is_err(), "allow manquant : refuse");
+        assert!(ecrit("OPS", "brain/workbench/OPS/a.md").is_err(), "allow manquant : refuse");
         std::fs::write(&ops_garde, r#"{"allow":"invalide","deny":[]}"#).unwrap();
-        assert!(ecrit("OPS", "docs/livrables/OPS/a.md").is_err(), "allow mal formé : refuse");
+        assert!(ecrit("OPS", "brain/workbench/OPS/a.md").is_err(), "allow mal formé : refuse");
         assert!(ecrit("QA", "brain/mind/QA/todo.md").unwrap().is_some());
         let qa_garde = crate::agent::perimetre_compact(&p, "QA");
         std::fs::write(&qa_garde, "invalide").unwrap();
@@ -299,7 +299,7 @@ mod tests {
         std::fs::write(brut.join("brain/mind/OPS/state.md"), "état").unwrap();
         std::fs::write(brut.join(".github/agents/ops.agent.md"), "---\nname: ops\n---\nrôle").unwrap();
         std::fs::write(brut.join(".github/copilot/perimetres/ops.json"),
-            r#"{"allow":["brain/mind/OPS","docs/livrables/OPS"],"deny":["brain/fact"]}"#).unwrap();
+            r#"{"allow":["brain/mind/OPS","brain/workbench/OPS"],"deny":["brain/fact"]}"#).unwrap();
         git(&["add", "."]);
         git(&["commit", "-qm", "test"]);
         let copie = std::env::temp_dir().join(format!("compact-worktree-copie-{}", std::process::id()));

@@ -163,8 +163,15 @@ Le rôle et le profil peuvent avoir une seule maison :
 .github\copilot\settings.json                activation commune du plugin
 brain\fact\                                 faits communs
 brain\mind\OPS\state.md et todo.md            mémoire OPS
-docs\livrables\OPS\                          productions OPS
+brain\workbench\OPS\                         productions OPS
 ```
+
+Depuis 0.19.0, `brain\workbench\<nom>\` est l'établi de chaque agent : ce qu'il produit (plans,
+analyses, scripts), séparé de `docs\`, qui reste l'archive du projet. La garde de
+commit ne le compte pas comme du code : un script SQL livré dans l'établi
+n'oblige pas à mettre l'état à jour. Un projet déjà compact qui range ses
+productions ailleurs (`docs\livrables\<nom>`) garde ses périmètres tels quels :
+le déplacer est une migration à décider, jamais faite par le harnais.
 
 Le nom de mémoire est conservé (`OPS`), le nom de profil/périmètre est slugifié
 (`ops`). Aucun dossier `agents\OPS` n'est nécessaire. Les hooks ne changent
@@ -188,7 +195,7 @@ harnais equipe --compact --project-root C:\Atelier\Projet --apply
 L'export préserve les personnalisations des profils et ajoute le rôle
 historique dans un bloc délimité. Il conserve les mémoires, les livrables,
 les sources et les anciens dossiers **sans les déplacer ni les supprimer**.
-Les instructions exportées renvoient à `docs\livrables\<nom>` ; déplacer
+Les instructions exportées renvoient à `brain\workbench\<nom>` ; déplacer
 les livrables, archiver la passation et corriger les références des instructions
 communes et de la mémoire exigent une migration distincte approuvée.
 Relire les profils fusionnés, en particulier les consignes personnalisées.

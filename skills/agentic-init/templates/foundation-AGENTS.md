@@ -181,7 +181,7 @@ Cassé, le projet est classé « aucune déclaration » et **disparaît sans un 
 **Architecture compacte (0.17.0, sur choix explicite).** Le profil Copilot et le
 rôle sont un seul fichier `.github/agents/<slug>.agent.md` ; le périmètre vit
 dans `.github/copilot/perimetres/<slug>.json`. L'état reste
-`brain/mind/<nom>/{state,todo}.md`, les productions dans `docs/livrables/<nom>/`.
+`brain/mind/<nom>/{state,todo}.md`, les productions dans `brain/workbench/<nom>/`.
 Le nom de mémoire est conservé, le slug est celui du profil de menu.
 Le contexte interne des hooks pointe vers cette mémoire sans déplacer la
 session réelle. Le rôle d'un profil choisi est déjà chargé par Copilot et
