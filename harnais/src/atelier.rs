@@ -58,7 +58,7 @@ un code existant ailleurs y reste, sans rien y écrire : `harnais adopte --code\
 \"<chemin du code>\"` depuis le dossier du projet en garde l'adresse.\n\
 Présente les profils : OPS = socle (base, routes serveur, CI, déploiement, workspace) ;\n\
 PO = produit (applications, logique métier, ce que voit l'utilisateur) ;\n\
-QA = épreuve (lit tout, n'écrit nulle part, livre un plan ; ne répare jamais son audit).\n\
+QA = épreuve (mémoire et livrables propres, faits sur accord humain ; jamais de réparation technique).\n\
 Un profil = mono-agent ; plusieurs = multi-agents après lecture de roles.md.\n\
 On ne découpe pas parce que le projet est gros. Propose ensuite de personnaliser\n\
 chaque profil (nom, périmètre, règles, ton), ou de garder ses valeurs par défaut.\n\

@@ -61,7 +61,10 @@ class ReleaseTests(unittest.TestCase):
             self.assertIn("personnalisation", text)
         qa = (release.ROOT / "skills" / "agentic-agents" / "references" / "profiles" /
               "QA.md").read_text(encoding="utf-8")
-        self.assertIn("aucune écriture", qa)
+        self.assertIn("validation explicite", qa)
+        self.assertIn(" # fact-ok", qa)
+        self.assertIn("sources d'audit", qa)
+        self.assertNotIn("aucune écriture", qa)
         self.assertIn("Ne jamais réparer", qa)
 
     def test_snapshot_rejects_links(self):

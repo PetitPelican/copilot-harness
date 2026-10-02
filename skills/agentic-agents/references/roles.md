@@ -74,8 +74,10 @@ commanditaire perd la moitié de ce qui devrait lui arriver.
 
 ### 3. L'épreuve — ce qui regarde tout et ne possède rien
 
-**Tient** : rien. Son périmètre en écriture est **vide** — tout le code lui est
-refusé par la garde de périmètre. Il lit l'intégralité du projet.
+**Tient** : ses livrables et sa mémoire. Il peut enrichir les cinq fichiers
+de faits sur validation explicite du commanditaire, sans changer ses propres
+permissions. La garde refuse le code, les sources d'audit et les espaces
+des pairs. Les documents privés et secrets restent hors lecture.
 
 **Produit** : un **plan de remédiation exécutable par les autres lots sans
 revenir vers lui**. Pas un rapport de constats — un plan de travail. Le test de
@@ -83,10 +85,13 @@ sortie : *si l'agent d'en face doit reposer une question pour commencer, le plan
 n'est pas fini.* Chaque entrée porte le fichier et la ligne, ce qui est faux, ce
 qui devrait être là, comment le vérifier après coup, et la sévérité.
 
-**Sa règle fondatrice** : *il ne répare jamais ce qu'il audite.* Un constat
+**Sa règle fondatrice** : *il ne répare jamais le code ou la production qu'il audite.* Un constat
 qu'on corrige est un constat que plus personne ne vérifie ; un audit qui se
 corrige lui-même n'est plus un audit, c'est une relecture. C'est aussi ce qui
 oblige son plan à être précis — c'est son seul moyen d'agir sur le code.
+Rédiger un plan ou consolider des faits validés n'est pas une réparation
+technique. Un commit documentaire dans son périmètre est permis, avec
+état à jour et ` # fact-ok` pour les faits autorisés ; jamais de contournement.
 
 **Son instrument** : des **grilles de risques** écrites *avant* de chercher, une
 par domaine (identité, autorisation, entrées, données, chaîne de dépendances,

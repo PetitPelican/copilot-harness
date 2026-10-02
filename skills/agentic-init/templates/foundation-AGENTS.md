@@ -188,7 +188,9 @@ session réelle. Le rôle d'un profil choisi est déjà chargé par Copilot et
 n'est pas recopié dans le briefing ; un agent par défaut reçoit son rôle.
 Un périmètre compact absent ou illisible refuse les écritures de fichiers.
 Son `allow` obligatoire est une liste positive : mémoire propre et livrables
-propres par défaut, vide pour QA. `deny` prime. Tout droit de modifier le code
+propres par défaut. QA reçoit aussi les cinq chemins exacts de faits,
+modifiables uniquement sur validation explicite du commanditaire.
+`deny` prime. Tout droit de modifier le code
 est une extension explicite décidée par l'humain, pas un effet du rangement.
 À l'export, le refus historique de `docs/` devient cette liste positive.
 Les limites shell/MCP et timeout restent inchangées.
@@ -222,7 +224,7 @@ rôles types, et un quatrième hors projet :
 |---|---|---|
 | **socle** | base, routes serveur, paquets publiés, CI, workspace | ce que voit l'utilisateur |
 | **produit** | applications, logique métier, vitrine, builds | le socle, la mise en production |
-| **épreuve** | **rien** — lit tout, écrit nulle part ; livre un plan que les autres exécutent | il ne répare jamais ce qu'il audite |
+| **épreuve** | mémoire et livrables propres ; faits sur accord humain ; plan que les autres exécutent | code, production et réparation technique de son audit |
 | *atelier* | *le poste et le harnais, hors projet* | *les projets — lecture seule* |
 
 Le détail — ce que chaque rôle couvre, ce que ce modèle **ne** couvre pas, le

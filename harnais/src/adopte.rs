@@ -90,6 +90,7 @@ là que les collisions arrivent.\n\n");
 }
 
 fn agents_md_agent(nom: &str, projet: &str) -> String {
+    if nom.eq_ignore_ascii_case("QA") { return crate::equipe::role_qa().into(); }
     format!("# {nom} — {projet}\n\n\
 Tu es **{nom}** sur ce projet. Ce fichier ne porte QUE ton rôle : ce qui vaut\n\
 pour tout le monde vit dans `AGENTS.md` à la racine, qui est hérité.\n\n\
@@ -297,14 +298,14 @@ Lis brain/mind/{a}/state.md et brain/mind/{a}/todo.md à la reprise.\n\n\
                 rap.pose(profil.clone(), &format!("profil et rôle uniques de {a}"), &c);
                 ecrits.push((profil, c));
                 let garde = crate::agent::perimetre_compact(&racine, a);
-                let mut denies = vec![".github".to_string(), "brain/fact".into(), "brain/poids.json".into()];
+                let mut denies = vec![".github".to_string(), "brain/poids.json".into()];
+                if !a.eq_ignore_ascii_case("QA") { denies.push("brain/fact".into()); }
                 for n in equipe.iter().filter(|n| *n != a) {
                     denies.push(format!("brain/mind/{n}"));
                     denies.push(format!("docs/livrables/{n}"));
                 }
-                if a.eq_ignore_ascii_case("QA") { denies.push(".".into()); }
-                let allow = if a.eq_ignore_ascii_case("QA") { vec![] }
-                    else { vec![format!("brain/mind/{a}"), format!("docs/livrables/{a}")] };
+                let allow = crate::equipe::allow_par_defaut(a, "brain/fact",
+                    &format!("brain/mind/{a}"), &format!("docs/livrables/{a}"));
                 let c = serde_json::json!({"allow": allow, "deny": denies}).to_string() + "\n";
                 rap.pose(garde.clone(), &format!("périmètre centralisé de {a}"), &c);
                 ecrits.push((garde, c));
@@ -328,7 +329,12 @@ Lis brain/mind/{a}/state.md et brain/mind/{a}/todo.md à la reprise.\n\n\
                 let denies: Vec<PathBuf> = equipe.iter().filter(|n| *n != a)
                     .map(|n| racine.join("agents").join(n)).collect();
                 rap.a_faire.push((garde.clone(), format!("protéger le périmètre de {a}")));
-                ecrits.push((garde, serde_json::json!({"deny": denies}).to_string() + "\n"));
+                let mut v = serde_json::json!({"deny": denies});
+                if a.eq_ignore_ascii_case("QA") {
+                    v["allow"] = serde_json::json!(crate::equipe::allow_par_defaut(a, "brain/fact",
+                        &format!("brain/mind/{a}"), &format!("agents/{a}/livrables")));
+                }
+                ecrits.push((garde, v.to_string() + "\n"));
             }
             crate::copilot::avertit_ancien(&d);
             crate::copilot::avertit_settings_agent(&d);
@@ -448,7 +454,8 @@ mod essais {
             assert!(crate::agent::perimetre_compact(&d, n).is_file());
         }
         let qa = d.join("brain/mind/QA");
-        assert!(crate::copilot::lis_deny(&qa).unwrap().contains(&PathBuf::from(".")));
+        assert!(!crate::copilot::lis_deny(&qa).unwrap().contains(&PathBuf::from(".")));
+        assert_eq!(crate::copilot::lis_allow(&qa).unwrap().unwrap().len(), 7);
         std::fs::write(crate::agent::profil(&d, "OPS"), "personnalisé").unwrap();
         assert_eq!(main(&args), 0);
         assert_eq!(std::fs::read_to_string(crate::agent::profil(&d, "OPS")).unwrap(), "personnalisé");

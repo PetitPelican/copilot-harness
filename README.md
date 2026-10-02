@@ -55,6 +55,16 @@ Plugin pour **GitHub Copilot CLI** : méthode `AGENTS.md`, mémoire versionnée,
 briefing, gardes, journal et huit skills. Le dépôt de distribution est
 [PetitPelican/copilot-harness](https://github.com/PetitPelican/copilot-harness).
 
+Depuis **0.18.0**, un nouveau QA peut écrire sa mémoire, ses livrables et
+les cinq fichiers de faits après validation humaine (` # fact-ok` au commit).
+Il ne répare ni code ni production et ne modifie pas ses permissions.
+Les chemins Markdown de `allow` sont exacts ; les dossiers autorisés couvrent
+leurs descendants. Cette liste positive est aussi prise en charge dans les
+périmètres historiques ; sans `allow`, leur comportement reste inchangé.
+L'export conserve les restrictions existantes : il n'élargit pas les anciens
+QA sans accord. Réconcilier leur rôle, garde et instructions communes avant
+d'ouvrir une nouvelle conversation. Voir la [fiche QA](skills/agentic-agents/references/profiles/QA.md).
+
 ## Prérequis
 
 - Windows 10/11 x86_64, Git et PowerShell 5.1 ou supérieur.

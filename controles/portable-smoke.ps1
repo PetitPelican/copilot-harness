@@ -202,7 +202,7 @@ try {
             Assert (($memoryBefore.Hash -join ',') -eq ($memoryAfter.Hash -join ',')) 'export compact modifie la memoire'
             Assert ((Get-Content '.github\agents\ops.agent.md' -Raw) -match 'ROLE-OPS-TEST') 'role compact absent du profil'
             $qaDeny = (Get-Content '.github\copilot\perimetres\qa.json' -Raw | ConvertFrom-Json).deny
-            Assert (@($qaDeny) -contains '.') 'QA compact nest pas sans ecriture'
+            Assert (@($qaDeny) -notcontains '.') 'QA documentaire conserve un refus global'
             # Retrait seulement des dossiers de ce projet synthetique jetable.
             Remove-Item -LiteralPath (Join-Path $team 'agents\OPS') -Recurse -Force
             Remove-Item -LiteralPath (Join-Path $team 'agents\QA') -Recurse -Force
@@ -226,7 +226,17 @@ try {
             $compactDefault = (Hook 'briefing' $compactPrompt | ConvertFrom-Json).modifiedTransformedPrompt
             Assert ($compactDefault -match 'ROLE-QA-TEST') 'role QA compact par defaut absent'
             $compactWrite.toolArgs.path = 'brain/mind/QA/todo.md'
-            Assert (((Hook 'perimetre' $compactWrite | ConvertFrom-Json).permissionDecision) -eq 'deny') 'QA compact ecrit sa memoire'
+            Assert ((Hook 'perimetre' $compactWrite) -eq '') 'QA documentaire ne peut tenir sa memoire'
+            foreach ($path in @('brain/fact/base.md', 'brain/fact/stack.md', 'brain/fact/architecture.md',
+                'brain/fact/rules.md', 'brain/fact/roles.md', 'docs/livrables/QA/plan.md')) {
+                $compactWrite.toolArgs.path = $path
+                Assert ((Hook 'perimetre' $compactWrite) -eq '') "QA documentaire refuse $path"
+            }
+            foreach ($path in @('brain/fact/extra.md', 'src/code.py', '.env', 'docs/audit/source.md',
+                'brain/mind/OPS/todo.md', 'docs/livrables/OPS/a.md', '.github/agents/qa.agent.md')) {
+                $compactWrite.toolArgs.path = $path
+                Assert (((Hook 'perimetre' $compactWrite | ConvertFrom-Json).permissionDecision) -eq 'deny') "QA documentaire autorise $path"
+            }
             Invoke-Git -Arguments @('worktree', 'remove', '--force', $session)
         } finally { Pop-Location }
         if ($Copilot) {
@@ -247,7 +257,7 @@ try {
         }
         Invoke-Git -Arguments @('worktree', 'remove', '--force', $copy)
     } finally { Pop-Location }
-    Write-Output 'PASS: atelier, accueil/declaration/restart, adoption partielle, idempotence, briefing/session/refresh, worktree/equipe-vue/agent, gardes, journal, choix d agent, export compact, memoire preservee, profils sans anciens dossiers et QA sans ecriture.'
+    Write-Output 'PASS: atelier, accueil/declaration/restart, adoption partielle, idempotence, briefing/session/refresh, worktree/equipe-vue/agent, gardes, journal, choix d agent, export compact, memoire preservee, profils sans anciens dossiers et QA documentaire sans droits techniques.'
     if ($Copilot) { Write-Output 'PASS: decouverte CLI des instructions et des huit skills (sans inference).' }
 } finally {
     foreach ($n in $names) { [Environment]::SetEnvironmentVariable($n, $saved[$n], 'Process') }

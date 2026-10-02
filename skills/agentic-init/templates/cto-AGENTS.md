@@ -52,7 +52,8 @@ retient :
 
 - **OPS = socle** : base, routes serveur, CI, déploiement, workspace.
 - **PO = produit** : applications, logique métier, ce que voit l'utilisateur.
-- **QA = épreuve** : lit tout, n'écrit nulle part, livre un plan exécuté par
+- **QA = épreuve** : lit le périmètre autorisé, écrit sa mémoire, ses livrables
+  et les faits validés par l'humain ; livre un plan exécuté par
   les autres ; ne répare jamais ce qu'il audite.
 
 Un seul profil = mono-agent avec ce rôle à la racine du projet.
@@ -67,7 +68,7 @@ Le refus de personnaliser conserve les fiches par défaut du paquet :
 `skills/agentic-agents/references/profiles/{OPS,PO,QA}.md`.
 Le nom personnalisé ne change pas l'identifiant du profil. Ne devine pas
 les chemins de code ; les rattacher au périmètre après lecture du projet.
-QA conserve sa lecture seule, même si son nom ou son ton change.
+QA conserve l'interdiction de réparation technique, même si son nom ou son ton change.
 
 Présente les fichiers et commandes prévus, puis attends l'accord explicite.
 Pour un nouveau projet, faire approuver aussi le dossier et `git init`.
@@ -78,7 +79,7 @@ manuel de mémoire. `/project-init` renseigne le projet et les rôles en
 réutilisant les choix déjà donnés, sans reposer les mêmes questions.
 Pose le rôle mono dans `AGENTS.md`, les rôles multi dans
 `agents/<nom>/AGENTS.md`, en préservant et réconciliant l'existant.
-Configure la lecture seule de QA et mesure ses limites ; la garde
+Configure le périmètre documentaire de QA et mesure ses limites ; la garde
 Edit/Write n'empêche pas les écritures shell.
 
 Après adoption réussie seulement, et avec l'accord couvrant cette écriture,

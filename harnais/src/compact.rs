@@ -101,14 +101,23 @@ fn prepare(p: &Path) -> Result<Vec<(PathBuf, String)>, String> {
                 if !deny.contains(&interdit) { deny.push(interdit); }
             }
         }
-        for interdit in [".github", "brain/fact", "brain/poids.json"] {
+        for interdit in [".github", "brain/poids.json"] {
             if !deny.iter().any(|s| s == interdit) { deny.push(interdit.into()); }
         }
-        if n.eq_ignore_ascii_case("QA") && !deny.iter().any(|s| s == ".") { deny.push(".".into()); }
+        if !n.eq_ignore_ascii_case("QA") && !deny.iter().any(|s| s == "brain/fact") { deny.push("brain/fact".into()); }
         v["deny"] = json!(deny);
         if !garde.exists() {
-            v["allow"] = if n.eq_ignore_ascii_case("QA") { json!([]) }
-                else { json!([format!("brain/mind/{n}"), format!("docs/livrables/{n}")]) };
+            if let Some(allow) = v.get("allow") {
+                let liste = allow.as_array().ok_or("allow doit être une liste")?;
+                let chemins = liste.iter().map(|x| {
+                    let x = x.as_str().filter(|s| !s.trim().is_empty()).ok_or("allow doit contenir des chemins non vides")?;
+                    Ok(x.replace(&format!("agents/{n}/livrables"), &format!("docs/livrables/{n}")))
+                }).collect::<Result<Vec<_>, &str>>()?;
+                v["allow"] = json!(chemins);
+            } else {
+                v["allow"] = json!(crate::equipe::allow_par_defaut(n, "brain/fact",
+                    &format!("brain/mind/{n}"), &format!("docs/livrables/{n}")));
+            }
         } else {
             crate::copilot::lis_allow(&crate::agent::contexte(&racine, n))?;
         }
@@ -188,6 +197,32 @@ mod tests {
         assert!(std::process::Command::new("git").args(["init", "-q"]).current_dir(&p).status().unwrap().success());
         assert_eq!(main(&p, true), 1);
         assert!(!p.join(".github").exists());
+        std::fs::remove_dir_all(&p).unwrap();
+    }
+
+    #[test]
+    fn export_qa_documentaire_preserve_allow_et_restrictions() {
+        let p = std::env::temp_dir().join(format!("compact-qa-documentaire-{}", std::process::id()));
+        std::fs::create_dir_all(p.join("brain/fact")).unwrap();
+        std::fs::create_dir_all(p.join("brain/mind/QA")).unwrap();
+        std::fs::create_dir_all(p.join("agents/QA/.github/copilot")).unwrap();
+        assert!(std::process::Command::new("git").args(["init", "-q"]).current_dir(&p).status().unwrap().success());
+        let p = p.canonicalize().unwrap();
+        for f in ["state.md", "todo.md"] { std::fs::write(p.join("brain/mind/QA").join(f), "initial").unwrap(); }
+        std::fs::write(p.join("agents/QA/AGENTS.md"), crate::equipe::role_qa()).unwrap();
+        let allow = crate::equipe::allow_par_defaut("QA", "brain/fact", "brain/mind/QA", "agents/QA/livrables");
+        std::fs::write(p.join("agents/QA/.github/copilot/perimetre.json"),
+            json!({"allow":allow,"deny":[".github","brain/poids.json","brain/fact/rules.md"]}).to_string()).unwrap();
+        assert_eq!(main(&p, true), 0);
+        let contexte = crate::agent::contexte(&p, "QA");
+        let ecrit = |f: &str| crate::copilot::decision(&json!({"tool_name":"Write","tool_input":{"file_path":p.join(f)}}), &contexte);
+        for f in ["brain/fact/base.md", "brain/mind/QA/todo.md", "docs/livrables/QA/plan.md"] {
+            assert!(ecrit(f).unwrap().is_none(), "{f}");
+        }
+        for f in ["brain/fact/rules.md", "brain/fact/extra.md", "src/code.py", ".github/agents/qa.agent.md"] {
+            assert!(ecrit(f).unwrap().is_some(), "{f}");
+        }
+        assert!(prepare(&p).unwrap().is_empty(), "export ne réintroduit pas un refus des faits");
         std::fs::remove_dir_all(&p).unwrap();
     }
 

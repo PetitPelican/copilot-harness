@@ -147,11 +147,13 @@ pub fn lis_deny(d: &Path) -> Result<Vec<PathBuf>, String> {
 
 pub fn lis_allow(d: &Path) -> Result<Option<Vec<PathBuf>>, String> {
     let p = fichier_perimetre(d);
-    if !p.parent().is_some_and(|d| d.ends_with(".github/copilot/perimetres")) { return Ok(None); }
+    let compact = p.parent().is_some_and(|d| d.ends_with(".github/copilot/perimetres"));
+    if !compact && !p.is_file() { return Ok(None); }
     let t = std::fs::read_to_string(&p).map_err(|e| format!("{} : {e}", p.display()))?;
     let v: Value = serde_json::from_str(&t).map_err(|e| format!("{} : {e}", p.display()))?;
+    if !compact && v.get("allow").is_none() { return Ok(None); }
     let liste = v.get("allow").and_then(Value::as_array)
-        .ok_or_else(|| format!("{} : allow doit être une liste en architecture compacte", p.display()))?;
+        .ok_or_else(|| format!("{} : allow doit être une liste", p.display()))?;
     liste.iter().map(|v| v.as_str().filter(|s| !s.trim().is_empty()).map(PathBuf::from)
         .ok_or_else(|| format!("{} : allow doit contenir des chemins non vides", p.display())))
         .collect::<Result<Vec<_>, _>>().map(Some)
@@ -267,7 +269,12 @@ pub fn decision(charge: &Value, lancement: &Path) -> Result<Option<String>, Stri
         let chemin = Path::new(chemin);
         let chemin = if chemin.is_absolute() { chemin.to_path_buf() } else { base.join(chemin) };
         if let Some(allow) = &allow {
-            if !allow.iter().any(|a| dedans(&chemin, a)) {
+            if !allow.iter().any(|a| {
+                // Les fichiers de faits sont des autorisations exactes, pas des dossiers.
+                if a.extension().is_some_and(|e| e == "md") {
+                    sous(&canonique(&chemin), &canonique(a)).is_some_and(|r| r.as_os_str().is_empty())
+                } else { dedans(&chemin, a) }
+            }) {
                 return Ok(Some(format!("Écriture refusée hors périmètre autorisé : {}", chemin.display())));
             }
         }

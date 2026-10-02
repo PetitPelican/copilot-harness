@@ -46,7 +46,8 @@ Le choix dans le menu résout l'identité ; le contexte interne des hooks pointe
 vers la mémoire de cet agent, sans changer le cwd réel de Copilot.
 Un périmètre compact absent ou illisible refuse les écritures de fichiers.
 En compact, `allow` est obligatoire : par défaut mémoire propre et
-`docs/livrables/<nom>/`, liste vide pour QA. `deny` prime. Les chemins de code
+`docs/livrables/<nom>/`. QA reçoit aussi les cinq chemins exacts de faits,
+à modifier uniquement sur validation humaine. `deny` prime. Les chemins de code
 autorisés se déclarent après arbitrage humain, jamais implicitement.
 À l'export, le refus historique de tout `docs/` est remplacé par cette liste
 positive : les autres documents restent inaccessibles en écriture.
@@ -67,6 +68,10 @@ et des références communes est séparée et nécessite l'accord humain.
 Relire le profil fusionné. Valider les nouvelles sessions, puis seulement
 archiver/retirer les anciens dossiers sur accord. Les deux formes restent lues.
 Sur une équipe compacte, les nouveaux agents gardent la forme compacte.
+Les anciens périmètres QA restent conservés, même s'ils refusent toute
+écriture ; leur mise à jour exige accord humain et réconciliation des
+instructions communes. L'export ne réintroduit pas un refus global ou un
+refus des faits dans un QA documentaire déjà configuré.
 
 **Architecture historique, encore prise en charge.**
 `agents/<nom>/` porte le RÔLE de l'agent (`AGENTS.md`) et son périmètre ;
@@ -83,8 +88,8 @@ Présenter OPS (socle), PO (produit), QA (épreuve), puis faire choisir
 un ou plusieurs profils. **Un seul reste mono-agent**, avec son rôle
 dans le `AGENTS.md` racine : ne pas appeler `equipe` pour ce cas.
 Avant de créer, proposer nom, périmètre, règles propres et ton ; reprendre
-les réponses de l'accueil CTO sans les redemander. QA ne reçoit aucun
-droit d'écriture. Les fiches renvoient à `roles.md`, qui reste la référence
+les réponses de l'accueil CTO sans les redemander. QA reçoit seulement les
+droits documentaires de sa fiche, jamais la réparation technique. Les fiches renvoient à `roles.md`, qui reste la référence
 pour le découpage et les frontières.
 
 Quand deux lots ont des **rythmes** différents et des **contextes disjoints** —

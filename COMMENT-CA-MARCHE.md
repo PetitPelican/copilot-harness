@@ -383,7 +383,8 @@ les trois profils, propose nom/périmètre/règles/ton, puis fait approuver les
 écritures. Les fiches `skills/agentic-agents/references/profiles/` renvoient à
 `roles.md` sans remplacer cette référence. Un seul profil reste mono-agent ;
 plusieurs profils n'ont de sens qu'avec des responsabilités disjointes.
-QA reste en lecture seule, sans prétendre que la garde Edit/Write bloque
+QA peut écrire sa mémoire, ses livrables et les cinq faits validés par
+l'humain, sans réparation technique, sans prétendre que la garde Edit/Write bloque
 les écritures shell.
 
 Le registre et les instructions doivent être commités pour les nouvelles

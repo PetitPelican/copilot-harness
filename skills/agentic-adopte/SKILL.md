@@ -57,7 +57,8 @@ de conclure que l'installation sert vraiment.
 En équipe compacte (`--compact`, 0.17.0) : un jeu d'état sous
 `brain/mind/<nom>/`, le profil ET rôle dans `.github/agents/<slug>.agent.md`,
 le périmètre dans `.github/copilot/perimetres/<slug>.json`.
-QA est sans écriture ; les autres périmètres protègent les mémoires et
+QA a un périmètre documentaire positif : mémoire et livrables propres,
+cinq fichiers de faits sur accord humain. Les autres périmètres protègent les mémoires et
 livrables des pairs et les configurations communes, mais restent à compléter
 pour le code propre au projet. Les livrables sont prévus sous
 `docs/livrables/<nom>/` ; aucun dossier `agents/` n'est créé.

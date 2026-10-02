@@ -46,7 +46,34 @@ le périmètre affiché par le briefing et appliqué par la garde.]
 [LES_AUTRES_LOTS — et qui les tient.]
 ";
 
-fn role(nom: &str) -> String { ROLE.replacen("{}", nom, 1) }
+pub(crate) fn role_qa() -> &'static str {
+    "# QA — épreuve indépendante et documentation\n\n\
+Auditer sans réparer le code ni la production et sans diriger les autres lots.\n\
+Écrire ses plans et grilles dans ses livrables, tenir son état et sa todo.\n\
+Les cinq fichiers de faits (base, stack, architecture, rules, roles) ne sont\n\
+modifiables qu'après validation explicite de l'humain ; conserver cap,\n\
+provenance, dates et distinction entre mesure et information rapportée.\n\
+Un commit documentaire est permis dans ce périmètre : mettre son état à jour,\n\
+utiliser ` # fact-ok` uniquement pour les faits autorisés, jamais ` # mind-ok`.\n\
+Ne pas modifier les sources d'audit, les instructions, gardes, mémoires des\n\
+pairs ou le carnet automatique. Ne pas lire ni écrire operations.md, .env\n\
+ou secrets ; ne pas exécuter de pipeline ni changer une base ou un cloud.\n\
+La garde de fichiers ne confine pas le shell/MCP ; elle ne prouve pas\n\
+la disponibilité d'accès en lecture. Nommer l'arbre, la preuve et les limites.\n"
+}
+
+fn role(nom: &str) -> String {
+    if nom.eq_ignore_ascii_case("QA") { role_qa().into() }
+    else { ROLE.replacen("{}", nom, 1) }
+}
+
+pub(crate) fn allow_par_defaut(nom: &str, fact: &str, mind: &str, livrables: &str) -> Vec<String> {
+    let mut allow = vec![mind.to_string(), livrables.to_string()];
+    if nom.eq_ignore_ascii_case("QA") {
+        allow.extend(crate::socle::faits_tous().iter().map(|f| format!("{fact}/{f}")));
+    }
+    allow
+}
 
 fn profil_role(p: &Path, n: &str, appliquer: bool, rap: &mut Vec<(String, String)>) -> Result<(), String> {
     let f = crate::agent::profil(p, n);
@@ -173,10 +200,18 @@ fn perimetre_agent(cible: &Path, projet: &Path, autres: &[String],
             denies.push(format!("brain/mind/{a}"));
             denies.push(format!("docs/livrables/{a}"));
         }
-        denies.extend([".github", "brain/fact", "brain/poids.json"].map(String::from));
-        if nom(cible).eq_ignore_ascii_case("QA") { denies.push(".".into()); }
+        denies.extend([".github", "brain/poids.json"].map(String::from));
+        if !nom(cible).eq_ignore_ascii_case("QA") { denies.push("brain/fact".into()); }
         crate::agent::perimetre_compact(projet, &nom(cible))
     } else { cible.join(".github/copilot/perimetre.json") };
+    let nouveau = !perimetre.exists();
+    if !est_compact && nouveau && nom(cible).eq_ignore_ascii_case("QA") {
+        denies.extend([".github", "brain/poids.json"].map(String::from));
+        for a in autres {
+            denies.push(format!("brain/mind/{a}"));
+            denies.push(format!("docs/livrables/{a}"));
+        }
+    }
     if perimetre.exists() {
         if est_compact { crate::copilot::lis_allow(cible)?; }
         let base = projet.canonicalize().unwrap_or_else(|_| projet.to_path_buf());
@@ -202,10 +237,13 @@ fn perimetre_agent(cible: &Path, projet: &Path, autres: &[String],
         } else { json!({}) };
         let avant = garde.clone();
         garde["deny"] = json!(denies);
-        if est_compact && garde.get("allow").is_none() {
+        if (est_compact || (nouveau && nom(cible).eq_ignore_ascii_case("QA"))) && garde.get("allow").is_none() {
             let n = nom(cible);
-            garde["allow"] = if n.eq_ignore_ascii_case("QA") { json!([]) }
-                else { json!([format!("brain/mind/{n}"), format!("docs/livrables/{n}")]) };
+            let cerveau = projet.join("brain/fact").is_dir();
+            let fact = if cerveau { "brain/fact" } else { ".fact" };
+            let mind = if cerveau { format!("brain/mind/{n}") } else { format!("agents/{n}/.mind") };
+            let livrables = if est_compact { format!("docs/livrables/{n}") } else { format!("agents/{n}/livrables") };
+            garde["allow"] = json!(allow_par_defaut(&n, fact, &mind, &livrables));
         }
         if !perimetre.exists() || garde != avant {
             std::fs::write(perimetre, json_indent2(&garde) + "\n").map_err(|e| e.to_string())?;
@@ -533,6 +571,32 @@ mod essais {
     use super::*;
 
     #[test]
+    fn qa_historique_a_un_allow_documentaire_et_conserve_les_restrictions() {
+        for cerveau in [false, true] {
+            let p = std::env::temp_dir().join(format!("equipe-qa-historique-{cerveau}-{}", std::process::id()));
+            std::fs::create_dir_all(p.join(if cerveau { "brain/fact" } else { ".fact" })).unwrap();
+            let d = p.join("agents/QA");
+            std::fs::create_dir_all(&d).unwrap();
+            assert!(Command::new("git").args(["init", "-q"]).current_dir(&p).status().unwrap().success());
+            assert!(perimetre_agent(&d, &p, &["OPS".into()], true, &mut vec![]).is_ok());
+            let ecrit = |f: &str| crate::copilot::decision(&json!({"tool_name":"Write","tool_input":{"file_path":p.join(f)}}), &d);
+            let fact = if cerveau { "brain/fact/base.md" } else { ".fact/base.md" };
+            let mind = if cerveau { "brain/mind/QA/todo.md" } else { "agents/QA/.mind/todo.md" };
+            for f in [fact, mind, "agents/QA/livrables/plan.md"] {
+                assert!(ecrit(f).unwrap().is_none(), "{f}");
+            }
+            for f in ["src/code.py", ".env", "docs/audit/source.md", "agents/OPS/livrables/a.md"] {
+                assert!(ecrit(f).unwrap().is_some(), "{f}");
+            }
+            assert!(std::fs::read_to_string(d.join(".github/copilot/perimetre.json")).unwrap().contains("allow"));
+            std::fs::write(d.join(".github/copilot/perimetre.json"), r#"{"allow":[],"deny":["."]}"#).unwrap();
+            assert!(perimetre_agent(&d, &p, &["OPS".into()], true, &mut vec![]).is_ok());
+            assert!(ecrit(fact).unwrap().is_some(), "mise à niveau ne lève pas un refus existant");
+            std::fs::remove_dir_all(&p).unwrap();
+        }
+    }
+
+    #[test]
     fn creation_et_ajout_compacts_sans_dossiers_agents() {
         let p = std::env::temp_dir().join(format!("equipe-compact-{}", std::process::id()));
         std::fs::create_dir_all(p.join("brain/fact")).unwrap();
@@ -550,7 +614,14 @@ mod essais {
         assert_eq!(main(&args), 0);
         assert!(!p.join("agents").exists());
         assert!(crate::agent::profil(&p, "OPS").is_file());
-        assert!(crate::copilot::lis_deny(&p.join("brain/mind/QA")).unwrap().contains(&PathBuf::from(".")));
+        let qa = p.join("brain/mind/QA");
+        assert!(!crate::copilot::lis_deny(&qa).unwrap().contains(&PathBuf::from(".")));
+        for f in ["brain/fact/base.md", "brain/mind/QA/todo.md", "docs/livrables/QA/plan.md"] {
+            assert!(crate::copilot::decision(&json!({"tool_name":"Write","tool_input":{"file_path":p.join(f)}}), &qa).unwrap().is_none(), "{f}");
+        }
+        for f in ["brain/fact/autre.md", "brain/fact/base.md/code.py", "brain/mind/OPS/todo.md", "docs/audit/a.md", "src/a.rs", ".env", ".github/agents/qa.agent.md"] {
+            assert!(crate::copilot::decision(&json!({"tool_name":"Write","tool_input":{"file_path":p.join(f)}}), &qa).unwrap().is_some(), "{f}");
+        }
         assert_eq!(main(&["--project-root".into(), p.display().to_string(), "--agents".into(),
             "PO".into(), "--apply".into()]), 0);
         assert!(!p.join("agents").exists(), "ajout conserve la forme compacte");

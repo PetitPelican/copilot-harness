@@ -191,7 +191,8 @@ et consigne-les dans `docs/decisions.md` : ne les redemande pas.
 Un profil donne un mono-agent ; plusieurs donnent une équipe selon
 `../agentic-agents/references/roles.md`. Les fiches par défaut sont dans
 `../agentic-agents/references/profiles/`. Propose nom, périmètre, règles
-et ton avant l'écriture ; QA demeure strictement en lecture seule.
+et ton avant l'écriture ; QA peut tenir sa mémoire et ses livrables, et
+consolider les cinq faits sur accord humain, sans réparer le code ni la production.
 Chaque prévisualisation doit être suivie d'un accord explicite avant
 `--go`, `--apply`, la création des rôles ou la déclaration au CTO.
 
