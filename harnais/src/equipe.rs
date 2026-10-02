@@ -153,7 +153,10 @@ fn perimetre_agent(cible: &Path, projet: &Path, autres: &[String],
     if perimetre.exists() {
         let base = projet.canonicalize().unwrap_or_else(|_| projet.to_path_buf());
         for chemin in crate::copilot::lis_deny(cible)? {
-            let ecrit = if chemin.is_relative() { rel(Path::new(""), &chemin) } else {
+            // `\\x` sous Windows n'a pas de lecteur mais a une racine : il n'est
+            // PAS relatif au projet, il reste tel qu'écrit.
+            let ecrit = if chemin.is_relative() && !chemin.has_root() { rel(Path::new(""), &chemin) }
+                        else if chemin.is_relative() { chemin.to_string_lossy().to_string() } else {
                 let c = chemin.canonicalize().unwrap_or_else(|_| chemin.clone());
                 if c.starts_with(&base) { rel(&base, &c) } else { chemin.to_string_lossy().to_string() }
             };
@@ -463,6 +466,9 @@ mod essais {
         std::fs::create_dir_all(d.join(".github/agents")).unwrap();
         assert!(Command::new("git").args(["init", "-q"]).current_dir(&d).status().unwrap().success());
         let d = d.canonicalize().unwrap();
+        // Un absolu HORS du projet, sur cette plateforme : `/x` n'en est pas un sous Windows.
+        let dehors = std::env::temp_dir().join(format!("hors-projet-{}", std::process::id()));
+        let dehors = dehors.to_string_lossy().to_string();
         std::fs::create_dir_all(d.join("brain/fact")).unwrap();
         for a in ["OPS", "Projet QA"] {
             std::fs::create_dir_all(d.join("brain/mind").join(a)).unwrap();
@@ -470,13 +476,13 @@ mod essais {
             std::fs::create_dir_all(d.join("agents").join(a).join(".github/copilot")).unwrap();
         }
         std::fs::write(d.join("agents/OPS/.github/copilot/perimetre.json"),
-            json!({"deny": [d.join("agents/Projet QA"), "/hors/projet"]}).to_string()).unwrap();
+            json!({"deny": [d.join("agents/Projet QA"), dehors]}).to_string()).unwrap();
         std::fs::write(d.join(".github/agents/ops.agent.md"), "à la main\n").unwrap();
 
         assert_eq!(mise_a_niveau(&d, true), 0);
         let v: Value = serde_json::from_str(&std::fs::read_to_string(
             d.join("agents/OPS/.github/copilot/perimetre.json")).unwrap()).unwrap();
-        assert_eq!(v["deny"], json!(["agents/Projet QA", "/hors/projet"]), "relatif sous le projet, absolu hors");
+        assert_eq!(v["deny"], json!(["agents/Projet QA", dehors]), "relatif sous le projet, absolu hors");
         assert_eq!(std::fs::read_to_string(d.join(".github/agents/ops.agent.md")).unwrap(), "à la main\n",
                    "un profil existant n'est jamais écrasé");
         let qa = std::fs::read_to_string(d.join(".github/agents/projet-qa.agent.md")).unwrap();

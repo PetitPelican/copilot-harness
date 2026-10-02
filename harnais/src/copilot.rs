@@ -153,7 +153,8 @@ fn ancre(p: &Path, copie: Option<&Path>, principal: Option<&Path>) -> PathBuf {
         for c in reste.components() { out.push(c); }
         out
     };
-    if p.is_relative() { return pose(p); }
+    // Relatif au sens du projet : ni lecteur ni racine (`\\x` sous Windows a une racine).
+    if p.is_relative() && !p.has_root() { return pose(p); }
     if let Some(m) = principal {
         if let Some(reste) = sous(&canonique(p), &canonique(m)) { return pose(&reste); }
     }
@@ -310,7 +311,8 @@ mod essais {
         for a in ["PO", "QA"] { std::fs::write(d.join("agents").join(a).join("x.md"), "x").unwrap(); }
         g(&d, &["add", "-A"]);
         g(&d, &["commit", "-q", "-m", "p"]);
-        let w = d.with_file_name(format!("perimetre-copie-w-{}", std::process::id()));
+        // PAS depuis `d` canonique : sous Windows ce serait un chemin `\\?\` que git refuse.
+        let w = std::env::temp_dir().join(format!("perimetre-copie-w-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&w);
         g(&d, &["worktree", "add", "-q", "-b", "session", w.to_str().unwrap()]);
         let w = w.canonicalize().unwrap();
