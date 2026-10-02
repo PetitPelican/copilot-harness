@@ -148,6 +148,46 @@ recopie pas, ni tes conclusions, ni les questions que tu as déjà posées dans 
 Fais ce qui est demandé, puis termine par une ou deux lignes qui disent ce que tu as \
 changé.";
 
+/// Ce que dit une garde, en clair : la phrase que lit quelqu'un qui ne connaît pas
+/// le harnais. Une garde absente de cette liste n'est jamais muette : elle
+/// retombe sur la formule générale.
+fn libelle(quoi: &str) -> &'static str {
+    match quoi {
+        "B1-code-sans-todo" => "du code a changé sans que la liste de tâches du projet soit mise à jour",
+        "B2-reponse" => "@user a répondu à une question depuis ses Rappels",
+        "B3-tranche" => "@user a tranché une question depuis ses Rappels",
+        "B4-demande" => "@user a laissé une demande dans les Rappels de l'agent",
+        "B4-cible" => "@user a fait une demande marquée !cible, pas encore close",
+        "B5-carnet" => "du code a été commité dans une zone partagée sans note au carnet d'équipe",
+        "B6-faits" => "les fichiers de faits du projet ont été modifiés",
+        "B7-constat-sans-rejeu" => "des constats de la liste n'ont aucun moyen d'être revérifiés",
+        "B8-forme" => "des lignes destinées à @user sont écrites comme des constats, pas comme des questions fermées",
+        "B9-tombe" => "des constats ne sont plus vrais d'après leur propre vérification",
+        "B10-rechutes" => "des points vont partir chez @user : la liste des erreurs déjà vues doit être rejouée avant",
+        "B11-acharnement" => "la cible du projet n'avance pas malgré plusieurs mesures",
+        "B12-contredit" => "un relecteur indépendant contredit des affirmations de l'agent",
+        "B13-poser" => "des questions nouvelles attendent @user et le message de fin de tour ne les pose pas",
+        "B14-notion" => "des questions pour @user n'ont pas leur ligne dans la base Notion du projet",
+        _ => "règle de tenue du projet",
+    }
+}
+
+/// LA SIGNATURE. Quand une garde renvoie l'agent au travail, l'app affiche sa
+/// raison comme un message de l'utilisateur. Sans ce rappel, @user croit avoir
+/// écrit une consigne qu'il ne reconnaît pas, et personne ne sait d'où elle vient.
+fn entete(quoi: Option<&str>) -> String {
+    let (code, texte) = match quoi {
+        Some(q) => (format!(" « {q} »"), libelle(q)),
+        None => (String::new(), libelle("")),
+    };
+    format!("[Harnais — rappel automatique. Ce message n'a pas été écrit par @user.]\n\
+Le harnais est le plugin installé dans l'atelier : à chaque fin de tour, une garde \
+vérifie que le projet est tenu à jour, et renvoie l'agent au travail quand ce n'est \
+pas le cas.\n\
+Garde déclenchée{code} : {texte}.\n\
+@user n'a rien à faire : l'agent corrige seul.\n\n")
+}
+
 fn sortie(code: i32, message: Option<String>, quoi: Option<&str>, detail: &str) -> ! {
     let mut message = message;
     if code == 2 {
@@ -178,7 +218,10 @@ d'environnement, ni une affirmation négative sur un outil.\n", vues + 1));
     // message, que le commanditaire avait déjà lu : il voyait la même
     // conclusion répétée.
     if code == 2 {
-        if let Some(m) = &mut message { m.push_str(PIED_RENVOI); }
+        if let Some(m) = &mut message {
+            m.push_str(PIED_RENVOI);
+            *m = format!("{}{}", entete(quoi), m);
+        }
     }
     if code == 2 {
         crate::hote::renvoie(&message.unwrap_or_default());
@@ -1652,6 +1695,41 @@ fn cibles_a_rappeler(f: &Path, todo_txt: &str) -> Vec<(String, &'static str, Str
 }
 
 #[cfg(test)]
+mod essais_signature {
+    use super::*;
+
+    #[test]
+    fn chaque_garde_se_dit_en_clair_et_signe_son_message() {
+        let source = include_str!("attente.rs");
+        let mut codes = std::collections::BTreeSet::new();
+        for morceau in source.split("Some(\"B").skip(1) {
+            if let Some(fin) = morceau.find('"') {
+                let code = format!("B{}", &morceau[..fin]);
+                if code.chars().nth(1).is_some_and(|c| c.is_ascii_digit()) { codes.insert(code); }
+            }
+        }
+        assert!(codes.len() >= 14, "gardes trouvées : {codes:?}");
+        for c in &codes {
+            assert_ne!(libelle(c), libelle(""), "la garde {c} n'a pas de libellé en clair");
+        }
+        let e = entete(Some("B8-forme"));
+        assert!(e.starts_with("[Harnais — rappel automatique."));
+        assert!(e.contains("« B8-forme »") && e.contains("n'a pas été écrit par @user"));
+        assert!(!entete(None).contains("« "));
+    }
+
+    #[test]
+    fn l_exemple_donne_aux_agents_est_dit_inventé() {
+        // Les phrases sont recomposées : le texte du test ne doit pas se trouver lui-même.
+        let source = include_str!("attente.rs");
+        let ancien = ["paiement", "en", "ligne"].join(" ");
+        let annonce = ["l'exemple", "est", "INVENTÉ"].join(" ");
+        assert!(!source.contains(&ancien), "un exemple qui ressemble à une vraie activité");
+        assert_eq!(source.matches(&annonce).count(), 2, "chaque exemple annonce qu'il est inventé");
+    }
+}
+
+#[cfg(test)]
 mod essais_cibles {
     use super::*;
 
@@ -1920,8 +1998,9 @@ souvent depuis son téléphone. Ce n'est PAS un moyen de ne pas lui demander : i
 souvent disponible, et une question rangée sans être posée dort des \
 jours.\n\nAvant de rendre la main : \
 coche ce que tu as fini, et écris ce qui l'attend, une entrée par blocage, dans \
-cette forme exacte :\n\n\
-- [ ] !haut @user **J'autorise le paiement en ligne ? oui / non**\n      oui → la boutique encaisse dès lundi ; il me faut ta signature, 20 min.\n      non → on ouvre sans encaissement, les clients paient à la livraison.\n      fini quand → tu ouvres la boutique et un paiement d'essai passe.\n      Ça attend depuis 4 jours ; j'ai continué sur le reste.\n\n\
+cette forme exacte (l'exemple est INVENTÉ et sans rapport avec ce projet : seule \
+la forme compte) :\n\n\
+- [ ] !haut @user **J'archive les anciens rapports ? oui / non**\n      oui → ils partent en archive demain ; tu pourras les rouvrir pendant 30 jours.\n      non → ils restent où ils sont et le dossier continue de grossir.\n      fini quand → tu ouvres le dossier et il ne reste que le mois en cours.\n      Ça attend depuis 4 jours ; j'ai continué sur le reste.\n\n\
 UNE QUESTION FERMÉE, JAMAIS UN CONSTAT. Un constat lui laisse tout le travail : \
 comprendre ce qu'on lui demande, deviner comment répondre, et mesurer seul ce \
 qu'il risque à ne pas répondre. Il doit trancher d'un mot, depuis son téléphone, \
@@ -2412,8 +2491,9 @@ et continue ton travail.\n\nJe te le redirai dans {} cycles si rien ne bouge.",
 CONSTATS, pas comme des questions : {}.\n\nUn constat lui laisse tout le travail \
 — comprendre ce qu'on lui demande, deviner comment répondre, mesurer seul ce \
 qu'il risque à ne pas répondre. Il doit trancher d'un mot, depuis son téléphone, \
-sans rien ouvrir.\n\nRéécris chacune dans cette forme :\n\n\
-- [ ] !haut @user **J'autorise le paiement en ligne ? oui / non**\n      oui → la boutique encaisse dès lundi ; il me faut ta signature, 20 min.\n      non → on ouvre sans encaissement, les clients paient à la livraison.\n      fini quand → tu ouvres la boutique et un paiement d'essai passe.\n      Ça attend depuis 4 jours ; j'ai continué sur le reste.\n\n\
+sans rien ouvrir.\n\nRéécris chacune dans cette forme (l'exemple est INVENTÉ et sans rapport avec \
+ce projet : seule la forme compte) :\n\n\
+- [ ] !haut @user **J'archive les anciens rapports ? oui / non**\n      oui → ils partent en archive demain ; tu pourras les rouvrir pendant 30 jours.\n      non → ils restent où ils sont et le dossier continue de grossir.\n      fini quand → tu ouvres le dossier et il ne reste que le mois en cours.\n      Ça attend depuis 4 jours ; j'ai continué sur le reste.\n\n\
 Le libellé porte la question ET les réponses possibles. Dessous, une ligne par \
 réponse : ce qu'elle DÉCLENCHE, pas ce qu'elle signifie. Trois voies : \
 numérote-les, il répond « 2 ».\n\nLa dernière ligne est obligatoire : `fini quand \

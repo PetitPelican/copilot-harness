@@ -200,7 +200,9 @@ devient une liste positive `allow` limitant l'écriture aux seuls livrables
 propres et à la mémoire propre. Aucun autre document ni code ne devient
 accessible en écriture. Pour un lot d'implémentation, ajouter ses chemins de code
 dans `allow` après arbitrage humain. `deny` prime toujours sur `allow`.
-QA a `allow: []` et reste sans écriture. Un agent compact sans périmètre,
+QA a pour `allow` sa mémoire, ses livrables et les cinq fichiers de faits (les
+faits ne s'écrivent qu'après validation humaine) ; le code et la production lui
+restent refusés. Un agent compact sans périmètre,
 ou avec un JSON invalide, est refusé par la garde. Ce refus ne couvre toujours
 pas le shell/MCP et ne garantit pas le déclenchement d'un hook dans l'app.
 
@@ -272,6 +274,18 @@ Dans un dépôt multi-agents, les réglages du plugin restent à la racine Git,
 pas dans chaque dossier d'agent. `harnais agent --session <id> --racine <copie>`
 dit, en lecture seule, quel agent les hooks de cette session ont reconnu et
 pourquoi.
+
+## Les messages du harnais dans la conversation
+
+À chaque fin de tour, des gardes du harnais vérifient que le projet est tenu à
+jour (liste de tâches, faits, questions posées à l'utilisateur). Quand l'une
+d'elles renvoie l'agent au travail, l'app affiche sa raison dans la
+conversation **comme un message de l'utilisateur**, alors qu'il ne l'a pas écrit.
+Depuis 0.18.1, ce message commence par une signature
+(`[Harnais — rappel automatique. Ce message n'a pas été écrit par @user.]`),
+nomme la garde (`B8-forme`, par exemple) et dit en une phrase ce qu'elle a vu.
+L'utilisateur n'a rien à faire : l'agent corrige seul. Les exemples contenus
+dans ces messages sont inventés et sans rapport avec le projet.
 
 ## Mise à jour et désinstallation
 
