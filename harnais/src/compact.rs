@@ -94,14 +94,14 @@ fn prepare(p: &Path) -> Result<Vec<(PathBuf, String)>, String> {
             if normalise.is_empty() { return Err("chemin deny vide : réconcilier à la main".into()); }
             // L'ancien refus de docs/ devient la liste positive : seul le
             // nouveau dossier de livrables propre pourra s'y écrire.
-            if (normalise != "docs" || garde.exists()) && !deny.contains(&normalise) { deny.push(normalise); }
+            if (normalise != "docs" || garde.exists() || !n.eq_ignore_ascii_case("QA")) && !deny.contains(&normalise) { deny.push(normalise); }
         }
         for a in noms.iter().filter(|a| *a != n) {
             for interdit in [format!("brain/mind/{a}"), crate::agent::banc(a)] {
                 if !deny.contains(&interdit) { deny.push(interdit); }
             }
         }
-        for interdit in [".github", "brain/poids.json"] {
+        for interdit in crate::agent::CONTROLE.iter().copied().chain(["brain/poids.json"]) {
             if !deny.iter().any(|s| s == interdit) { deny.push(interdit.into()); }
         }
         if !n.eq_ignore_ascii_case("QA") && !deny.iter().any(|s| s == "brain/fact") { deny.push("brain/fact".into()); }
@@ -114,9 +114,9 @@ fn prepare(p: &Path) -> Result<Vec<(PathBuf, String)>, String> {
                     Ok(x.replace(&format!("agents/{n}/livrables"), &crate::agent::banc(n)))
                 }).collect::<Result<Vec<_>, &str>>()?;
                 v["allow"] = json!(chemins);
-            } else {
-                v["allow"] = json!(crate::equipe::allow_par_defaut(n, "brain/fact",
-                    &format!("brain/mind/{n}"), &crate::agent::banc(n)));
+            } else if let Some(a) = crate::equipe::allow_par_defaut(n, "brain/fact",
+                    &format!("brain/mind/{n}"), &crate::agent::banc(n)) {
+                v["allow"] = json!(a);
             }
         } else {
             crate::copilot::lis_allow(&crate::agent::contexte(&racine, n))?;
@@ -210,7 +210,7 @@ mod tests {
         let p = p.canonicalize().unwrap();
         for f in ["state.md", "todo.md"] { std::fs::write(p.join("brain/mind/QA").join(f), "initial").unwrap(); }
         std::fs::write(p.join("agents/QA/AGENTS.md"), crate::equipe::role_qa()).unwrap();
-        let allow = crate::equipe::allow_par_defaut("QA", "brain/fact", "brain/mind/QA", "agents/QA/livrables");
+        let allow = crate::equipe::allow_par_defaut("QA", "brain/fact", "brain/mind/QA", "agents/QA/livrables").unwrap();
         std::fs::write(p.join("agents/QA/.github/copilot/perimetre.json"),
             json!({"allow":allow,"deny":[".github","brain/poids.json","brain/fact/rules.md"]}).to_string()).unwrap();
         assert_eq!(main(&p, true), 0);
@@ -267,8 +267,13 @@ mod tests {
         assert!(ecrit("OPS", "brain/mind/OPS/todo.md").unwrap().is_none());
         assert!(ecrit("OPS", "brain/mind/QA/todo.md").unwrap().is_some());
         let ops_garde = crate::agent::perimetre_compact(&p, "OPS");
+        // Sans `allow`, le périmètre sépare l'agent de ses pairs et ne borne rien d'autre.
+        std::fs::write(&ops_garde, r#"{"deny":["brain/mind/QA"]}"#).unwrap();
+        assert!(ecrit("OPS", "docs/audit/a.md").unwrap().is_none(), "sans allow : tout est permis…");
+        assert!(ecrit("OPS", ".github/mcp.json").unwrap().is_none(), "…y compris la config du projet");
+        assert!(ecrit("OPS", "brain/mind/QA/todo.md").unwrap().is_some(), "…sauf les refus");
         std::fs::write(&ops_garde, r#"{"deny":[]}"#).unwrap();
-        assert!(ecrit("OPS", "brain/workbench/OPS/a.md").is_err(), "allow manquant : refuse");
+        assert!(ecrit("OPS", "brain/workbench/OPS/a.md").unwrap().is_none(), "ni allow ni deny : rien n'est interdit");
         std::fs::write(&ops_garde, r#"{"allow":"invalide","deny":[]}"#).unwrap();
         assert!(ecrit("OPS", "brain/workbench/OPS/a.md").is_err(), "allow mal formé : refuse");
         assert!(ecrit("QA", "brain/mind/QA/todo.md").unwrap().is_some());

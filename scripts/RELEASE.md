@@ -24,7 +24,7 @@ le mode normal n'accède pas au réseau. Pas de fetch, push, publication ou dép
 Il refuse les autres plateformes et la compilation croisée non vérifiable.
 Rappels est construit et vérifié uniquement sur macOS.
 
-La sortie est `release/harnais-1.0.0-windows-x86_64.zip` (ou `darwin-arm64`),
+La sortie est `release/harnais-1.1.0-windows-x86_64.zip` (ou `darwin-arm64`),
 avec une empreinte `.zip.sha256`. `--output` accepte uniquement un sous-dossier
 de ce checkout. L'archive contient le plugin directement à la racine,
 `install.ps1`, les sources nécessaires à sa reconstruction, les lanceurs,

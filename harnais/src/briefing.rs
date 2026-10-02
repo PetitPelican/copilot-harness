@@ -207,7 +207,8 @@ fn droits(r: &Path, aff: &Path) -> (Option<String>, Option<(String, Vec<String>,
     let vu = |p: &Path| crate::socle::chemin_affiche(aff, &p.canonicalize().unwrap_or_else(|_| p.to_path_buf()));
     match crate::copilot::perimetre(r) {
         Ok(deny) => match crate::copilot::lis_allow(r) {
-            Ok(allow) => (Some(vu(&garde)), Some(("garde preToolUse".into(),
+            Ok(allow) => (Some(vu(&garde)), Some((
+                if allow.is_some() { "garde preToolUse" } else { "garde preToolUse sans liste autorisée" }.into(),
                 allow.unwrap_or_default().iter().map(|p| p.to_string_lossy().to_string()).collect(),
                 deny.iter().map(|d| vu(d)).collect()))),
             Err(e) => (Some(e), Some(("refus : configuration illisible".into(), vec![], vec![".".into()]))),
@@ -749,8 +750,13 @@ pub fn compose(r: &Path, projet: Option<&Path>, session: &str) -> String {
             l.push("         Tout ce qui a été dit à l'oral n'est retenu par rien.".into());
         }
         Some((mode, allow, deny)) => {
-            l.push(format!("Garde Edit|Write ({}) : mode {} · {} allow · {} deny",
-                fichier.unwrap_or_default(), mode, allow.len(), deny.len()));
+            if mode.contains("sans liste") {
+                l.push(format!("Garde Edit|Write ({}) : tout est permis sauf {} refus — ils séparent cet agent de ses pairs",
+                    fichier.unwrap_or_default(), deny.len()));
+            } else {
+                l.push(format!("Garde Edit|Write ({}) : mode {} · {} allow · {} deny",
+                    fichier.unwrap_or_default(), mode, allow.len(), deny.len()));
+            }
             for rg in deny.iter().take(6) { l.push(format!("    refusé : {}", rg)); }
             if deny.is_empty() {
                 l.push("    ⚠ aucun périmètre déclaré : la garde laisse passer les écritures ;".into());

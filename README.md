@@ -202,16 +202,22 @@ Relire les profils fusionnés, en particulier les consignes personnalisées.
 
 Les périmètres centralisés deviennent prioritaires ; les interdictions
 existantes sont conservées, y compris `"."` (toute la racine) et les chemins
-externes absolus. Exception explicite à l'export : le refus global de `docs`
-devient une liste positive `allow` limitant l'écriture aux seuls livrables
-propres et à la mémoire propre. Aucun autre document ni code ne devient
-accessible en écriture. Pour un lot d'implémentation, ajouter ses chemins de code
-dans `allow` après arbitrage humain. `deny` prime toujours sur `allow`.
-QA a pour `allow` sa mémoire, ses livrables et les cinq fichiers de faits (les
-faits ne s'écrivent qu'après validation humaine) ; le code et la production lui
-restent refusés. Un agent compact sans périmètre,
-ou avec un JSON invalide, est refusé par la garde. Ce refus ne couvre toujours
-pas le shell/MCP et ne garantit pas le déclenchement d'un hook dans l'app.
+externes absolus.
+
+**Un périmètre sépare les agents entre eux** (depuis 1.1.0) ; il ne borne pas ce qu'un agent sait
+faire. Pour OPS et PO, la garde ne porte que sur le territoire des pairs (leur
+mémoire et leur établi), les faits communs (un seul écrivain), `brain\poids.json` et
+les fichiers qui font tenir le harnais (`.github\agents`, `.github\copilot`). **Sans
+liste `allow`, tout le reste leur est permis** : la CI, la configuration MCP, le code
+du projet, les documents. Une liste `allow`, si on en pose une, limite au contraire
+l'écriture à ces chemins ; `deny` prime toujours. Seul QA reçoit une liste `allow` par
+défaut : sa mémoire, son établi et les cinq fichiers de faits (écrits après validation
+humaine). **Tous les agents ont accès à tous les outils, MCP compris** ; QA ne s'en
+sert qu'en lecture, par son rôle et par les comptes utilisés, la garde ne couvrant pas
+les outils MCP. À l'export, le refus global de `docs` d'un ancien QA devient son
+`allow` ; pour OPS et PO il est conservé. Un agent compact sans périmètre, avec un
+JSON invalide ou un `allow` mal formé, est refusé par la garde. Ce refus ne couvre
+toujours pas le shell/MCP et ne garantit pas le déclenchement d'un hook dans l'app.
 
 Une équipe compacte conserve cette forme lors des ajouts par `equipe`.
 L'ancienne architecture reste prise en charge ; `--profils` reconnaît aussi

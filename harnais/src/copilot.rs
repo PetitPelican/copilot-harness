@@ -151,7 +151,10 @@ pub fn lis_allow(d: &Path) -> Result<Option<Vec<PathBuf>>, String> {
     if !compact && !p.is_file() { return Ok(None); }
     let t = std::fs::read_to_string(&p).map_err(|e| format!("{} : {e}", p.display()))?;
     let v: Value = serde_json::from_str(&t).map_err(|e| format!("{} : {e}", p.display()))?;
-    if !compact && v.get("allow").is_none() { return Ok(None); }
+    // Sans liste `allow`, le périmètre ne fait que séparer l'agent de ses pairs
+    // (`deny`) : tout le reste lui est permis. Une liste présente mais mal formée
+    // refuse : on ne devine pas ce que son auteur voulait permettre.
+    if v.get("allow").is_none() { return Ok(None); }
     let liste = v.get("allow").and_then(Value::as_array)
         .ok_or_else(|| format!("{} : allow doit être une liste", p.display()))?;
     liste.iter().map(|v| v.as_str().filter(|s| !s.trim().is_empty()).map(PathBuf::from)

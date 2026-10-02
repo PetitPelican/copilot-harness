@@ -244,6 +244,11 @@ pub fn banc(nom: &str) -> String {
     format!("{BANC}/{nom}")
 }
 
+/// Ce qui fait tenir le harnais : profils, périmètres, réglages. Un agent n'y écrit
+/// pas : y toucher, c'est changer le rôle ou les limites d'un autre. Le reste de
+/// `.github/` (CI, MCP, modèles de PR…) appartient au projet.
+pub const CONTROLE: [&str; 2] = [".github/agents", ".github/copilot"];
+
 pub fn compact(arbre: &Path, nom: &str) -> bool {
     perimetre_compact(arbre, nom).exists()
         || std::fs::read_to_string(profil(arbre, nom)).ok()

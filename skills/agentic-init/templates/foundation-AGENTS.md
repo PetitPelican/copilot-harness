@@ -187,12 +187,14 @@ Le contexte interne des hooks pointe vers cette mémoire sans déplacer la
 session réelle. Le rôle d'un profil choisi est déjà chargé par Copilot et
 n'est pas recopié dans le briefing ; un agent par défaut reçoit son rôle.
 Un périmètre compact absent ou illisible refuse les écritures de fichiers.
-Son `allow` obligatoire est une liste positive : mémoire propre et livrables
-propres par défaut. QA reçoit aussi les cinq chemins exacts de faits,
-modifiables uniquement sur validation explicite du commanditaire.
-`deny` prime. Tout droit de modifier le code
-est une extension explicite décidée par l'humain, pas un effet du rangement.
-À l'export, le refus historique de `docs/` devient cette liste positive.
+Un périmètre sépare les agents entre eux, il ne borne pas ce qu'un agent sait
+faire : pour OPS et PO, la garde refuse le territoire des pairs (mémoire,
+établi), les faits communs et les fichiers du harnais (`.github/agents`,
+`.github/copilot`) ; sans `allow`, tout le reste leur est permis. Seul QA a un
+`allow` par défaut : mémoire propre, établi et les cinq chemins exacts de faits,
+modifiables uniquement sur validation explicite du commanditaire. `deny` prime.
+Tous les agents ont accès à tous les outils, MCP compris ; QA ne s'en sert qu'en
+lecture. À l'export, le refus historique de `docs/` d'un QA devient son `allow`.
 Les limites shell/MCP et timeout restent inchangées.
 
 `harnais equipe --compact` prévisualise l'export d'une équipe existante ;

@@ -58,6 +58,8 @@ utiliser ` # fact-ok` uniquement pour les faits autorisés, jamais ` # mind-ok`.
 Ne pas modifier les sources d'audit, les instructions, gardes, mémoires des\n\
 pairs ou le carnet automatique. Ne pas lire ni écrire operations.md, .env\n\
 ou secrets ; ne pas exécuter de pipeline ni changer une base ou un cloud.\n\
+Tous les outils lui sont ouverts, MCP compris, mais en lecture seule : jamais\n\
+d'écriture sur un système. Il fait les plans que les autres agents exécutent.\n\
 La garde de fichiers ne confine pas le shell/MCP ; elle ne prouve pas\n\
 la disponibilité d'accès en lecture. Nommer l'arbre, la preuve et les limites.\n"
 }
@@ -67,12 +69,15 @@ fn role(nom: &str) -> String {
     else { ROLE.replacen("{}", nom, 1) }
 }
 
-pub(crate) fn allow_par_defaut(nom: &str, fact: &str, mind: &str, livrables: &str) -> Vec<String> {
+/// Seul QA reçoit une liste autorisée par défaut (sa mémoire, son établi et les cinq
+/// faits). OPS et PO n'ont qu'une liste de refus — le territoire de leurs pairs — et
+/// tout le reste leur est permis : un périmètre sépare les agents, il ne borne pas
+/// ce qu'un agent sait faire.
+pub(crate) fn allow_par_defaut(nom: &str, fact: &str, mind: &str, livrables: &str) -> Option<Vec<String>> {
+    if !nom.eq_ignore_ascii_case("QA") { return None; }
     let mut allow = vec![mind.to_string(), livrables.to_string()];
-    if nom.eq_ignore_ascii_case("QA") {
-        allow.extend(crate::socle::faits_tous().iter().map(|f| format!("{fact}/{f}")));
-    }
-    allow
+    allow.extend(crate::socle::faits_tous().iter().map(|f| format!("{fact}/{f}")));
+    Some(allow)
 }
 
 fn profil_role(p: &Path, n: &str, appliquer: bool, rap: &mut Vec<(String, String)>) -> Result<(), String> {
@@ -200,13 +205,15 @@ fn perimetre_agent(cible: &Path, projet: &Path, autres: &[String],
             denies.push(format!("brain/mind/{a}"));
             denies.push(crate::agent::banc(a));
         }
-        denies.extend([".github", "brain/poids.json"].map(String::from));
+        denies.extend(crate::agent::CONTROLE.iter().map(|s| s.to_string()));
+        denies.push("brain/poids.json".into());
         if !nom(cible).eq_ignore_ascii_case("QA") { denies.push("brain/fact".into()); }
         crate::agent::perimetre_compact(projet, &nom(cible))
     } else { cible.join(".github/copilot/perimetre.json") };
     let nouveau = !perimetre.exists();
     if !est_compact && nouveau && nom(cible).eq_ignore_ascii_case("QA") {
-        denies.extend([".github", "brain/poids.json"].map(String::from));
+        denies.extend(crate::agent::CONTROLE.iter().map(|s| s.to_string()));
+        denies.push("brain/poids.json".into());
         for a in autres {
             denies.push(format!("brain/mind/{a}"));
             denies.push(crate::agent::banc(a));
@@ -243,7 +250,7 @@ fn perimetre_agent(cible: &Path, projet: &Path, autres: &[String],
             let fact = if cerveau { "brain/fact" } else { ".fact" };
             let mind = if cerveau { format!("brain/mind/{n}") } else { format!("agents/{n}/.mind") };
             let livrables = if est_compact { crate::agent::banc(&n) } else { format!("agents/{n}/livrables") };
-            garde["allow"] = json!(allow_par_defaut(&n, fact, &mind, &livrables));
+            if let Some(a) = allow_par_defaut(&n, fact, &mind, &livrables) { garde["allow"] = json!(a); }
         }
         if !perimetre.exists() || garde != avant {
             std::fs::write(perimetre, json_indent2(&garde) + "\n").map_err(|e| e.to_string())?;

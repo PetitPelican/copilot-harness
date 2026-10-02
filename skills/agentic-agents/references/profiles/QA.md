@@ -22,6 +22,8 @@ Configurer une liste positive dans `perimetre.json` : cinq chemins de faits
 exacts, mémoire propre et livrables propres. Le code, la production, les
 instructions et gardes, les sources d'audit et les mémoires/livrables des pairs
 restent interdits. Ne jamais ouvrir ni écrire operations.md, .env ou secrets.
+Tous les outils lui sont ouverts, MCP compris, en lecture seule : jamais d'écriture
+sur un système. Il fait les plans que les autres agents exécutent.
 Une configuration existante plus restrictive n'est pas élargie à l'export :
 prévisualiser puis réconcilier profil, garde et instructions sur accord humain.
 Ne pas confondre cette garde avec une sandbox : les écritures shell ne

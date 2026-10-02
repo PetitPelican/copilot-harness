@@ -343,16 +343,26 @@ projet/
   docs/                                      l'archive : décisions, audits, passations
 ```
 
-**Les périmètres.** Un fichier `perimetres/<slug>.json` porte une liste `allow`
-(les seuls chemins où l'agent peut écrire) et une liste `deny`, relatives à la
-racine du projet ; `deny` prime. Un périmètre absent ou illisible refuse toute
-écriture. Par défaut, OPS et PO écrivent dans leur mémoire et leur établi. QA, qui
-éprouve sans réparer, écrit dans sa mémoire, son établi et les cinq fichiers de
-faits (`base`, `stack`, `architecture`, `rules`, `roles`), ces derniers après
-validation explicite de l'humain ; le code, la production, les instructions, les
-gardes et les espaces des pairs lui restent interdits. Un commit documentaire de QA
-est permis avec l'état à jour et ` # fact-ok` pour les faits ; jamais ` # mind-ok`.
-La garde ne couvre pas le shell ni les outils MCP.
+**Les périmètres.** Un périmètre sépare les agents **entre eux** : il dit quel est
+le territoire des pairs, il ne borne pas ce qu'un agent sait faire. Un fichier
+`perimetres/<slug>.json` porte une liste `deny` (relative à la racine du projet) et,
+facultativement, une liste `allow` ; `deny` prime. Un périmètre absent, illisible ou
+à `allow` mal formé refuse toute écriture.
+
+- **OPS et PO** n'ont, par défaut, qu'une liste `deny` : la mémoire et l'établi des
+  pairs, les faits communs (un seul écrivain), `brain/poids.json` et les fichiers qui
+  font tenir le harnais (`.github/agents`, `.github/copilot`). Tout le reste leur est
+  permis : la CI, la configuration MCP, le code du projet, les documents.
+- **QA**, qui éprouve sans réparer, a une liste `allow` : sa mémoire, son établi et
+  les cinq fichiers de faits (`base`, `stack`, `architecture`, `rules`, `roles`), ces
+  derniers après validation explicite de l'humain. Il fait les plans que les autres
+  exécutent. Un commit documentaire de QA est permis avec l'état à jour et
+  ` # fact-ok` pour les faits ; jamais ` # mind-ok`.
+- **Les outils** : aucun profil ne les limite (`tools: ["*"]` dans le journal de
+  session). Tous les agents ont accès à tous les outils, MCP compris ; les serveurs
+  MCP se déclarent pour le projet (section 9.7). QA les utilise en lecture seule :
+  cela vient de son rôle et des comptes en lecture seule, pas de la garde, qui ne
+  couvre ni le shell ni les outils MCP.
 
 **L'établi.** `brain/workbench/<nom>/` reçoit les plans, analyses et scripts d'un
 agent. Il est séparé de `docs/`, qui reste l'archive du projet. La garde de commit
@@ -519,6 +529,18 @@ une écriture d'OPS dans l'établi de PO est refusée par la garde.
   apparaît dans le journal ; le contexte de l'agent change au message suivant.
 - Une nouvelle conversation démarre avec l'agent précédent (vu au démarrage de la
   session) : ne pas s'y fier sans lire le briefing.
+
+### 9.7 Donner un accès à un agent (MCP)
+
+Tous les agents ont accès à tous les outils : aucun profil ne limite `tools`. Un
+serveur MCP se déclare **pour le projet** et chaque agent le voit ; un réglage par
+agent n'est pas mesuré. Copilot lit `.mcp.json` ou `.github/mcp.json` à la racine du
+dépôt (le support de `.vscode/mcp.json` a été retiré) et la configuration de
+l'utilisateur ; `/mcp add`, ou « Add MCP server » dans l'app, en crée une. Un agent
+dont le périmètre n'interdit pas ce fichier peut le modifier. Les identifiants ne
+vont jamais dans un fichier commité : des comptes en lecture seule, déclarés hors du
+dépôt. La garde de fichiers ne couvre pas les outils MCP : un agent en lecture seule
+(QA) l'est par son rôle et par le compte utilisé, pas par la garde.
 
 ---
 
