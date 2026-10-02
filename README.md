@@ -143,6 +143,64 @@ avant 0.16.0 : `harnais equipe --profils --apply`, puis commiter.
 
 ## Adopter un projet existant
 
+### Architecture multi-agents compacte (0.17.0, opt-in)
+
+Le rôle et le profil peuvent avoir une seule maison :
+
+```text
+.github\agents\ops.agent.md                  profil Copilot ET rôle OPS
+.github\copilot\perimetres\ops.json           garde OPS, relative au dépôt
+.github\copilot\settings.json                activation commune du plugin
+brain\fact\                                 faits communs
+brain\mind\OPS\state.md et todo.md            mémoire OPS
+docs\livrables\OPS\                          productions OPS
+```
+
+Le nom de mémoire est conservé (`OPS`), le nom de profil/périmètre est slugifié
+(`ops`). Aucun dossier `agents\OPS` n'est nécessaire. Les hooks ne changent
+pas de fonction : ils résolvent l'agent choisi et utilisent sa mémoire dans
+la copie courante. Le profil choisi par le menu n'est pas recopié dans le
+briefing ; QA par défaut reçoit son rôle si aucun profil n'a été choisi.
+
+```powershell
+# Nouvelle adoption, sans écriture avant --go.
+harnais adopte C:\Atelier\Projet --equipe OPS,PO,QA --compact
+
+# Conversion d'un projet mono déjà adopté, ou ajout d'agents.
+harnais equipe --agents OPS,PO,QA --compact --project-root C:\Atelier\Projet
+
+# Export d'une équipe existante : prévisualisation complète.
+harnais equipe --compact --project-root C:\Atelier\Projet
+# Après accord explicite seulement :
+harnais equipe --compact --project-root C:\Atelier\Projet --apply
+```
+
+L'export préserve les personnalisations des profils et ajoute le rôle
+historique dans un bloc délimité. Il conserve les mémoires, les livrables,
+les sources et les anciens dossiers **sans les déplacer ni les supprimer**.
+Les instructions exportées renvoient à `docs\livrables\<nom>` ; déplacer
+les livrables, archiver la passation et corriger les références des instructions
+communes et de la mémoire exigent une migration distincte approuvée.
+Relire les profils fusionnés, en particulier les consignes personnalisées.
+
+Les périmètres centralisés deviennent prioritaires ; les interdictions
+existantes sont conservées, y compris `"."` (toute la racine) et les chemins
+externes absolus. Exception explicite à l'export : le refus global de `docs`
+devient une liste positive `allow` limitant l'écriture aux seuls livrables
+propres et à la mémoire propre. Aucun autre document ni code ne devient
+accessible en écriture. Pour un lot d'implémentation, ajouter ses chemins de code
+dans `allow` après arbitrage humain. `deny` prime toujours sur `allow`.
+QA a `allow: []` et reste sans écriture. Un agent compact sans périmètre,
+ou avec un JSON invalide, est refusé par la garde. Ce refus ne couvre toujours
+pas le shell/MCP et ne garantit pas le déclenchement d'un hook dans l'app.
+
+Une équipe compacte conserve cette forme lors des ajouts par `equipe`.
+L'ancienne architecture reste prise en charge ; `--profils` reconnaît aussi
+une équipe compacte. Installer le nouveau paquet, commiter la configuration
+du projet et valider une nouvelle session par agent **avant** de retirer les
+anciens dossiers. Un changement de dossier ou de paquet ne reconfigure pas
+une conversation déjà ouverte.
+
 Le projet agentique se tient dans l'atelier : un dossier sous sa racine, avec
 son propre dépôt Git, qui porte les rôles, `brain/` et `docs/`. Depuis ce
 dossier :

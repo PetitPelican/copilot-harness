@@ -22,6 +22,7 @@ mod attente;
 mod briefing;
 mod carnet;
 mod copilot;
+mod compact;
 mod diagnostic;
 mod equipe;
 mod hote;

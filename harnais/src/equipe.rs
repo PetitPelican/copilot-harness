@@ -39,7 +39,7 @@ const ROLE: &str = "# {} — rôle
 
 [LE_PÉRIMÈTRE — en dossiers, pas en intentions. « orienté produit » n'empêche
 personne de toucher au backend ; la frontière qui tient est celle écrite en
-`perimetre.json` dans `.github/copilot/`, à côté.]
+le périmètre affiché par le briefing et appliqué par la garde.]
 
 ## Ce qu'il ne touche pas
 
@@ -47,6 +47,24 @@ personne de toucher au backend ; la frontière qui tient est celle écrite en
 ";
 
 fn role(nom: &str) -> String { ROLE.replacen("{}", nom, 1) }
+
+fn profil_role(p: &Path, n: &str, appliquer: bool, rap: &mut Vec<(String, String)>) -> Result<(), String> {
+    let f = crate::agent::profil(p, n);
+    if f.exists() {
+        return Err(format!("{} existe déjà ; réconcilier le rôle avant de créer cet agent", f.display()));
+    }
+    rap.push(("+".into(), format!("{} — profil et rôle uniques ; livrables dans docs/livrables/{n}/", rel(p, &f))));
+    if appliquer {
+        let texte = format!("---\nname: {}\ndescription: Agent {n} — rôle propre au projet\n---\n\
+Lis brain/mind/{n}/state.md et brain/mind/{n}/todo.md à la reprise. \
+Le harnais applique .github/copilot/perimetres/{}.json.\n\n\
+<!-- harnais:role:start -->\n{}<!-- harnais:role:end -->\n",
+            crate::agent::nom_de_profil(n), crate::agent::nom_de_profil(n), role(n));
+        std::fs::create_dir_all(f.parent().unwrap()).map_err(|e| e.to_string())?;
+        std::fs::write(f, texte).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
 
 /// Tout ce qui n'est pas alphanumérique devient un tiret, et une suite de tels
 /// caractères UN SEUL : deux noms d'agents qui donnent la même clé auraient les
@@ -149,8 +167,18 @@ fn perimetre_agent(cible: &Path, projet: &Path, autres: &[String],
                    appliquer: bool, rap: &mut Vec<(String, String)>) -> Result<(), String> {
     crate::copilot::avertit_settings_agent(cible);
     let mut denies: Vec<String> = autres.iter().map(|a| format!("agents/{a}")).collect();
-    let perimetre = cible.join(".github/copilot/perimetre.json");
+    let est_compact = cible.parent().is_some_and(|p| p == projet.join("brain/mind"));
+    let perimetre = if est_compact {
+        for a in autres {
+            denies.push(format!("brain/mind/{a}"));
+            denies.push(format!("docs/livrables/{a}"));
+        }
+        denies.extend([".github", "brain/fact", "brain/poids.json"].map(String::from));
+        if nom(cible).eq_ignore_ascii_case("QA") { denies.push(".".into()); }
+        crate::agent::perimetre_compact(projet, &nom(cible))
+    } else { cible.join(".github/copilot/perimetre.json") };
     if perimetre.exists() {
+        if est_compact { crate::copilot::lis_allow(cible)?; }
         let base = projet.canonicalize().unwrap_or_else(|_| projet.to_path_buf());
         for chemin in crate::copilot::lis_deny(cible)? {
             // `\\x` sous Windows n'a pas de lecteur mais a une racine : il n'est
@@ -158,7 +186,8 @@ fn perimetre_agent(cible: &Path, projet: &Path, autres: &[String],
             let ecrit = if chemin.is_relative() && !chemin.has_root() { rel(Path::new(""), &chemin) }
                         else if chemin.is_relative() { chemin.to_string_lossy().to_string() } else {
                 let c = chemin.canonicalize().unwrap_or_else(|_| chemin.clone());
-                if c.starts_with(&base) { rel(&base, &c) } else { chemin.to_string_lossy().to_string() }
+                if c == base { ".".into() }
+                else if c.starts_with(&base) { rel(&base, &c) } else { chemin.to_string_lossy().to_string() }
             };
             if !ecrit.is_empty() && !denies.contains(&ecrit) { denies.push(ecrit); }
         }
@@ -173,6 +202,11 @@ fn perimetre_agent(cible: &Path, projet: &Path, autres: &[String],
         } else { json!({}) };
         let avant = garde.clone();
         garde["deny"] = json!(denies);
+        if est_compact && garde.get("allow").is_none() {
+            let n = nom(cible);
+            garde["allow"] = if n.eq_ignore_ascii_case("QA") { json!([]) }
+                else { json!([format!("brain/mind/{n}"), format!("docs/livrables/{n}")]) };
+        }
         if !perimetre.exists() || garde != avant {
             std::fs::write(perimetre, json_indent2(&garde) + "\n").map_err(|e| e.to_string())?;
         }
@@ -237,6 +271,9 @@ Pour le passer en équipe : `harnais equipe --agents A,B`.");
         return 1;
     }
     if let Some(c) = profils_en_collision(&existants) { eprintln!("equipe --profils : {c} ; rien n'est écrit"); return 1; }
+    if existants.iter().any(|n| crate::agent::compact(p, n)) {
+        return crate::compact::main(p, appliquer);
+    }
     let racine = match crate::copilot::racine_git(p) { Ok(r) => r, Err(e) => { eprintln!("equipe : {e}"); return 1; } };
     let mut rap: Vec<(String, String)> = vec![];
     for n in &existants {
@@ -258,7 +295,8 @@ fn a_commiter(tous: &[String]) -> String {
     format!("COMMITER `.github/agents/` et les périmètres : une nouvelle conversation de l'app part de \
 l'état COMMITÉ, un profil non commité n'apparaît pas dans le menu. Ensuite, choisir l'agent dans le menu \
 d'agent du champ de saisie ({}) ; dans le CLI, `copilot --agent <nom>` ou une session lancée dans \
-`agents/<nom>/`. Sans agent choisi, {} tient la session s'il existe — le briefing le dit.",
+`agents/<nom>/` pour la forme historique. En compact : `copilot --agent <nom>` \
+depuis la racine. Sans agent choisi, {} tient la session s'il existe — le briefing le dit.",
         tous.iter().map(|n| crate::agent::nom_de_profil(n)).collect::<Vec<_>>().join(", "),
         crate::agent::DEFAUT)
 }
@@ -290,13 +328,20 @@ fn valeur(args: &[String], cle: &str) -> Option<String> {
 pub fn main(args: &[String]) -> i32 {
     if args.iter().any(|a| a == "-h" || a == "--help") {
         println!("harnais equipe --agents A,B[,C] [--project-root P] [--apply]\n\
-harnais equipe --profils [--project-root P] [--apply]\n\n\
+harnais equipe --profils [--project-root P] [--apply]\n\
+harnais equipe --compact [--agents A,B] [--project-root P] [--apply]\n\n\
 Passe un projet mono en équipe (le PREMIER nommé hérite de l'état existant),\n\
 ou ajoute des agents à un projet déjà en équipe. Chaque agent reçoit son profil\n\
 `.github/agents/<nom>.agent.md`, qui le fait apparaître dans le menu d'agent de l'app.\n\
 `--profils` met à niveau un projet déjà en équipe : profils manquants, périmètres\n\
-en chemins relatifs. À blanc par défaut.");
+en chemins relatifs. `--compact` exporte une équipe existante vers les profils-rôles\n\
+et périmètres centralisés, ou crée les agents demandés sous cette forme.\n\
+Les anciens dossiers et livrables ne sont jamais supprimés. À blanc par défaut.");
         return 0;
+    }
+    if args.iter().any(|a| a == "--compact") && !args.iter().any(|a| a == "--agents" || a.starts_with("--agents=")) {
+        let p = PathBuf::from(valeur(args, "--project-root").unwrap_or_else(|| ".".into()));
+        return crate::compact::main(&p, args.iter().any(|a| a == "--apply" || a == "--go"));
     }
     if args.iter().any(|a| a == "--profils") {
         let p0 = PathBuf::from(valeur(args, "--project-root").unwrap_or_else(|| ".".into()));
@@ -315,6 +360,17 @@ le PREMIER hérite de l'état existant)");
     let (mut rap, mut reste): (Vec<(String, String)>, Vec<String>) = (vec![], vec![]);
 
     let (f, existants, disp) = forme(&p);
+    let compact = args.iter().any(|a| a == "--compact")
+        || existants.iter().any(|n| crate::agent::compact(&p, n));
+    if compact && !disp.cerveau {
+        eprintln!("equipe : l'architecture compacte exige brain/ ; migrer la mémoire d'abord");
+        return 1;
+    }
+    if compact && f == "mono" && ["state.md", "todo.md"].iter()
+        .any(|n| !disp.esprit_mono().join(n).is_file()) {
+        eprintln!("equipe : mémoire mono incomplète ; compléter avant la conversion compacte");
+        return 1;
+    }
     crate::copilot::avertit_ancien(&p);
     if f == "ancienne" {
         println!("Ce projet n'a de faits ni dans `brain/fact/` ni dans `.fact/`. \
@@ -323,6 +379,19 @@ Lancer d'abord la migration de mémoire, puis revenir.");
     }
     if noms.is_empty() || noms.iter().any(|n| existants.contains(n)) {
         eprintln!("equipe : liste vide ou agent déjà présent ; aucun fichier n'a été écrasé");
+        return 1;
+    }
+    if noms.iter().any(|n| n == "." || n == ".." || n.contains(['/', '\\', ':'])
+        || crate::agent::nom_de_profil(n).is_empty()) {
+        eprintln!("equipe : nom d'agent invalide ; aucune écriture");
+        return 1;
+    }
+    if compact && f == "multi" && existants.iter().any(|n| !crate::agent::compact(&p, n)) {
+        eprintln!("equipe : exporter toute l'équipe avec --compact avant d'ajouter un agent compact ; aucune écriture");
+        return 1;
+    }
+    if compact && noms.iter().any(|n| crate::agent::profil(&p, n).exists()) {
+        eprintln!("equipe : un profil demandé existe déjà ; réconcilier avant de créer l'agent");
         return 1;
     }
     let tous_prevus: Vec<String> = existants.iter().chain(noms.iter()).cloned().collect();
@@ -335,7 +404,7 @@ Lancer d'abord la migration de mémoire, puis revenir.");
     let (neufs, tous): (Vec<String>, Vec<String>);
     if f == "mono" {
         let premier = noms[0].clone();
-        let cible = p.join("agents").join(&premier);
+        let cible = if compact { disp.esprit(&premier) } else { p.join("agents").join(&premier) };
         let (src, dst) = (disp.esprit_mono(), disp.esprit(&premier));
         // Cerveau : `brain/mind/` NE bouge PAS, ce sont ses FICHIERS qui
         // descendent d'un cran. Ancienne forme : le dossier descend en entier.
@@ -357,10 +426,13 @@ Lancer d'abord la migration de mémoire, puis revenir.");
             }
         }
         if let Err(e) = perimetre_agent(&cible, &p, &noms[1..], appliquer, &mut rap) { eprintln!("equipe : {e}"); return 1; }
-        porte_les_non_herites(&p, &cible, appliquer, &mut rap);
+        if !compact { porte_les_non_herites(&p, &cible, appliquer, &mut rap); }
 
         // Le premier agent hérite de l'état, pas d'un rôle : il lui faut le sien.
-        if cible.join("CLAUDE.md").exists() { rap.push(("⚠".into(), format!("agents/{premier}/CLAUDE.md existe : ne pas doubler le rôle"))); }
+        if compact {
+            if let Err(e) = profil_role(&p, &premier, appliquer, &mut rap) { eprintln!("equipe : {e}"); return 1; }
+        }
+        else if cible.join("CLAUDE.md").exists() { rap.push(("⚠".into(), format!("agents/{premier}/CLAUDE.md existe : ne pas doubler le rôle"))); }
         else {
             rap.push(("+".into(), format!("agents/{premier}/AGENTS.md — rôle à remplir")));
             if appliquer && !cible.join("AGENTS.md").exists() { let _ = std::fs::write(cible.join("AGENTS.md"), role(&premier)); }
@@ -376,7 +448,7 @@ Lancer d'abord la migration de mémoire, puis revenir.");
 
     if f == "multi" {
         for ancien in &existants {
-            let d = p.join("agents").join(ancien);
+            let d = crate::agent::contexte(&p, ancien);
             let autres: Vec<String> = tous.iter().filter(|n| *n != ancien).cloned().collect();
             if let Err(e) = perimetre_agent(&d, &p, &autres, appliquer, &mut rap) { eprintln!("equipe : {e}"); return 1; }
         }
@@ -384,26 +456,30 @@ Lancer d'abord la migration de mémoire, puis revenir.");
 
     let jour = chrono::Local::now().format("%Y-%m-%d").to_string();
     for n in &neufs {
-        let d = p.join("agents").join(n);
+        let d = if compact { disp.esprit(n) } else { p.join("agents").join(n) };
         let esprit = disp.esprit(n);
-        rap.push(("+".into(), format!("agents/{}/ — AGENTS.md de rôle, périmètre Copilot ; esprit neuf dans {}", n, disp.rel(&esprit))));
+        rap.push(("+".into(), format!("{} — esprit neuf ; rôle et périmètre {}", disp.rel(&esprit),
+            if compact { "centralisés" } else { "dans agents/" })));
         if appliquer {
             let _ = std::fs::create_dir_all(&esprit);
             let _ = std::fs::create_dir_all(&d);
-            if !d.join("CLAUDE.md").exists() && !d.join("AGENTS.md").exists() { let _ = std::fs::write(d.join("AGENTS.md"), role(n)); }
+            if !compact && !d.join("CLAUDE.md").exists() && !d.join("AGENTS.md").exists() { let _ = std::fs::write(d.join("AGENTS.md"), role(n)); }
             let _ = std::fs::write(esprit.join("state.md"), format!(
                 "---\nmaj: {}\nsante: vert\njalon: [LE_PROCHAIN_CAILLOU de ce lot]\n---\n\n# État — {}\n\n[où en est CET agent]\n", jour, n));
             let _ = std::fs::write(esprit.join("todo.md"), format!("# À faire — {}\n\n- [ ] [première tâche de ce lot]\n", n));
         }
+        if compact {
+            if let Err(e) = profil_role(&p, n, appliquer, &mut rap) { eprintln!("equipe : {e}"); return 1; }
+        }
         let autres: Vec<String> = tous.iter().filter(|x| *x != n).cloned().collect();
         crate::copilot::avertit_ancien(&d);
         if let Err(e) = perimetre_agent(&d, &p, &autres, appliquer, &mut rap) { eprintln!("equipe : {e}"); return 1; }
-        porte_les_non_herites(&p, &d, appliquer, &mut rap);
+        if !compact { porte_les_non_herites(&p, &d, appliquer, &mut rap); }
     }
 
     // LES PROFILS DU MENU D'AGENT — tous, anciens compris : un projet converti
     // avant 0.16.0 n'en a aucun.
-    for n in &tous { profil(&racine, &p, n, &disp.esprit(n), appliquer, &mut rap); }
+    if !compact { for n in &tous { profil(&racine, &p, n, &disp.esprit(n), appliquer, &mut rap); } }
 
     // LE CARNET D'ÉQUIPE — LU partout, il ne serait CRÉÉ nulle part sans cet
     // appel. On appelle la règle qui le place, on ne la recopie pas.
@@ -437,9 +513,9 @@ périmètre propre se lit dans la garde Copilot ; une zone partagée ne se lit n
 collisions arrivent. Ce sont des FAITS : ça s'écrit à la demande de @user (` # fact-ok` au commit).",
             disp.etiquette_faits()));
     }
-    reste.push("DÉCOUPER AGENTS.md — la seule étape qui ne s'automatise pas. Le commun reste à la \
-racine, le rôle descend dans agents/<nom>/AGENTS.md. Contrôle de sortie : aucune phrase du bas ne \
-resterait vraie pour un autre agent.".into());
+    reste.push(format!("DÉCOUPER AGENTS.md — le commun reste à la racine, le rôle descend dans {}. \
+Contrôle de sortie : aucune phrase du bas ne resterait vraie pour un autre agent.",
+        if compact { ".github/agents/<nom>.agent.md" } else { "agents/<nom>/AGENTS.md" }));
     reste.push("ÉCRIRE LES PÉRIMÈTRES en dossiers dans chaque perimetre.json : les dossiers interdits ne couvrent \
 que les dossiers d'agents. Le code, lui, n'est pas partagé au hasard — dire qui tient quoi.".into());
     reste.push(a_commiter(&tous));
@@ -455,6 +531,33 @@ que les dossiers d'agents. Le code, lui, n'est pas partagé au hasard — dire q
 #[cfg(test)]
 mod essais {
     use super::*;
+
+    #[test]
+    fn creation_et_ajout_compacts_sans_dossiers_agents() {
+        let p = std::env::temp_dir().join(format!("equipe-compact-{}", std::process::id()));
+        std::fs::create_dir_all(p.join("brain/fact")).unwrap();
+        std::fs::create_dir_all(p.join("brain/mind")).unwrap();
+        std::fs::write(p.join("brain/mind/state.md"), "état mono").unwrap();
+        std::fs::write(p.join("brain/mind/todo.md"), "todo mono").unwrap();
+        assert!(Command::new("git").args(["init", "-q"]).current_dir(&p).status().unwrap().success());
+        let p = p.canonicalize().unwrap();
+        let args = vec!["--project-root".into(), p.display().to_string(), "--agents".into(),
+            "OPS,QA".into(), "--compact".into()];
+        assert_eq!(main(&args), 0);
+        assert!(!p.join(".github").exists(), "dry-run sans écriture");
+        let mut args = args;
+        args.push("--apply".into());
+        assert_eq!(main(&args), 0);
+        assert!(!p.join("agents").exists());
+        assert!(crate::agent::profil(&p, "OPS").is_file());
+        assert!(crate::copilot::lis_deny(&p.join("brain/mind/QA")).unwrap().contains(&PathBuf::from(".")));
+        assert_eq!(main(&["--project-root".into(), p.display().to_string(), "--agents".into(),
+            "PO".into(), "--apply".into()]), 0);
+        assert!(!p.join("agents").exists(), "ajout conserve la forme compacte");
+        assert!(crate::agent::profil(&p, "PO").is_file());
+        assert!(crate::copilot::lis_deny(&p.join("brain/mind/OPS")).unwrap().contains(&PathBuf::from("docs/livrables/PO")));
+        std::fs::remove_dir_all(&p).unwrap();
+    }
 
     /// UN PROJET CONVERTI AVANT 0.16.0 : périmètres absolus vers le dossier
     /// principal, pas de profils, un profil écrit à la main. `--profils` le met à
@@ -498,6 +601,19 @@ mod essais {
         assert!(profils_en_collision(&["QA".into(), "qa".into()]).is_some());
         assert!(profils_en_collision(&["Q A".into(), "Q-A".into()]).is_some());
         assert!(profils_en_collision(&["OPS".into(), "PO".into(), "QA".into()]).is_none());
+    }
+
+    #[test]
+    fn conversion_du_deny_racine_ne_le_supprime_pas() {
+        let p = std::env::temp_dir().join(format!("equipe-deny-racine-{}", std::process::id()));
+        let d = p.join("agents/QA");
+        std::fs::create_dir_all(d.join(".github/copilot")).unwrap();
+        assert!(Command::new("git").args(["init", "-q"]).current_dir(&p).status().unwrap().success());
+        let p = p.canonicalize().unwrap();
+        std::fs::write(d.join(".github/copilot/perimetre.json"), json!({"deny":[p]}).to_string()).unwrap();
+        assert!(perimetre_agent(&d, &p, &["OPS".into()], true, &mut vec![]).is_ok());
+        assert!(crate::copilot::lis_deny(&d).unwrap().contains(&PathBuf::from(".")));
+        std::fs::remove_dir_all(&p).unwrap();
     }
 
     #[test]

@@ -178,6 +178,34 @@ Cassé, le projet est classé « aucune déclaration » et **disparaît sans un 
 
 ## Un agent, ou plusieurs
 
+**Architecture compacte (0.17.0, sur choix explicite).** Le profil Copilot et le
+rôle sont un seul fichier `.github/agents/<slug>.agent.md` ; le périmètre vit
+dans `.github/copilot/perimetres/<slug>.json`. L'état reste
+`brain/mind/<nom>/{state,todo}.md`, les productions dans `docs/livrables/<nom>/`.
+Le nom de mémoire est conservé, le slug est celui du profil de menu.
+Le contexte interne des hooks pointe vers cette mémoire sans déplacer la
+session réelle. Le rôle d'un profil choisi est déjà chargé par Copilot et
+n'est pas recopié dans le briefing ; un agent par défaut reçoit son rôle.
+Un périmètre compact absent ou illisible refuse les écritures de fichiers.
+Son `allow` obligatoire est une liste positive : mémoire propre et livrables
+propres par défaut, vide pour QA. `deny` prime. Tout droit de modifier le code
+est une extension explicite décidée par l'humain, pas un effet du rangement.
+À l'export, le refus historique de `docs/` devient cette liste positive.
+Les limites shell/MCP et timeout restent inchangées.
+
+`harnais equipe --compact` prévisualise l'export d'une équipe existante ;
+`--apply` écrit seulement les profils fusionnés et périmètres centralisés.
+Il ne déplace ni mémoire ni documents et ne supprime aucun ancien dossier.
+La migration des livrables et des références communes est une étape distincte
+approuvée par l'humain. Les périmètres centralisés font foi ; relire les profils
+et valider les sessions avant d'archiver les anciens dossiers.
+`harnais adopte --equipe A,B --compact` crée directement cette forme.
+`harnais equipe --agents A,B --compact` convertit un mono adopté ; les ajouts
+à une équipe compacte conservent cette forme.
+
+**L'organisation décrite ci-dessous est l'architecture historique, encore
+prise en charge.** Ses dossiers `agents/<nom>/` ne sont pas requis en compact.
+
 Un projet est tenu par **un** agent par défaut. Quand deux lots ont des rythmes
 différents et des contextes disjoints — typiquement infra/fiabilité d'un côté,
 produit/apps de l'autre — il peut en porter plusieurs. Ce n'est pas une réponse

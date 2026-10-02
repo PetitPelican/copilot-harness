@@ -195,15 +195,25 @@ fn sommaire(p: &Path, combien: usize) -> Option<(usize, Vec<String>)> {
 
 /// Le périmètre lu par la garde Edit|Write, sans promesse sur les outils shell.
 fn droits(r: &Path, aff: &Path) -> (Option<String>, Option<(String, Vec<String>, Vec<String>)>) {
-    let garde = r.join(".github/copilot/perimetre.json");
-    if !garde.exists() { return (None, None); }
+    let garde = crate::copilot::fichier_perimetre(r);
+    if !garde.exists() {
+        return match crate::copilot::perimetre(r) {
+            Err(e) => (Some(e), Some(("refus : configuration absente".into(), vec![], vec![".".into()]))),
+            Ok(_) => (None, None),
+        };
+    }
     // Affichés depuis le dossier de la SESSION : ce sont les chemins que la
     // garde compare, posés sur la copie courante (voir `copilot::perimetre`).
     let vu = |p: &Path| crate::socle::chemin_affiche(aff, &p.canonicalize().unwrap_or_else(|_| p.to_path_buf()));
     match crate::copilot::perimetre(r) {
-        Ok(deny) => (Some(vu(&garde)), Some(("garde preToolUse".into(), vec![],
-            deny.iter().map(|d| vu(d)).collect()))),
-        Err(e) => (Some(format!("périmètre illisible : {e}")), None),
+        Ok(deny) => match crate::copilot::lis_allow(r) {
+            Ok(allow) => (Some(vu(&garde)), Some(("garde preToolUse".into(),
+                allow.unwrap_or_default().iter().map(|p| p.to_string_lossy().to_string()).collect(),
+                deny.iter().map(|d| vu(d)).collect()))),
+            Err(e) => (Some(e), Some(("refus : configuration illisible".into(), vec![], vec![".".into()]))),
+        },
+        Err(e) => (Some(format!("périmètre illisible : {e}")),
+            Some(("refus : configuration illisible".into(), vec![], vec![".".into()]))),
     }
 }
 
@@ -214,7 +224,13 @@ fn surveilles(r: &Path, projet: Option<&Path>) -> Vec<PathBuf> {
     let md = mind_de(r);
     let mut surv: Vec<PathBuf> = MIND_ANCIEN.iter().map(|n| md.join(n)).collect();
     surv.push(crate::copilot::settings(&crate::copilot::racine_git(r).unwrap_or_else(|_| r.to_path_buf())));
-    surv.push(r.join(".github/copilot/perimetre.json"));
+    surv.push(crate::copilot::fichier_perimetre(r));
+    if let Ok(arbre) = crate::copilot::racine_git(r) {
+        let lot = memoire::lot(r);
+        if let Some((_, nom)) = lot.rsplit_once('/') {
+            surv.push(crate::agent::profil(&arbre, nom));
+        }
+    }
     surv.push(r.join("CLAUDE.md"));
     surv.push(r.join("AGENTS.md"));
     surv.push(projet.unwrap_or(r).join(crate::atelier::REGISTRE));

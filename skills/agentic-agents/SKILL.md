@@ -38,6 +38,37 @@ sont la même opération à une étape près.
 | `agentic-team` | la **vue** de l'atelier — lecture seule, ne modifie rien |
 | **`agentic-agents`** | la **forme** du projet — combien d'agents y travaillent |
 
+**Architecture compacte (0.17.0, opt-in).** `.github/agents/<slug>.agent.md`
+porte le profil ET le rôle ; `.github/copilot/perimetres/<slug>.json` porte
+la garde. La mémoire reste `brain/mind/<nom>/`, les livrables vont dans
+`docs/livrables/<nom>/`. Aucun dossier `agents/<nom>/` n'est nécessaire.
+Le choix dans le menu résout l'identité ; le contexte interne des hooks pointe
+vers la mémoire de cet agent, sans changer le cwd réel de Copilot.
+Un périmètre compact absent ou illisible refuse les écritures de fichiers.
+En compact, `allow` est obligatoire : par défaut mémoire propre et
+`docs/livrables/<nom>/`, liste vide pour QA. `deny` prime. Les chemins de code
+autorisés se déclarent après arbitrage humain, jamais implicitement.
+À l'export, le refus historique de tout `docs/` est remplacé par cette liste
+positive : les autres documents restent inaccessibles en écriture.
+
+```powershell
+# Export d'une équipe existante, à blanc puis après accord :
+harnais equipe --compact --project-root C:\Atelier\Projet
+harnais equipe --compact --project-root C:\Atelier\Projet --apply
+# Création depuis un mono adopté, ou ajout :
+harnais equipe --agents OPS,PO --compact --project-root C:\Atelier\Projet
+```
+
+L'export affiche le contenu complet, conserve les personnalisations des profils
+et fusionne leur rôle historique dans un bloc délimité. Il ne déplace ni mémoire,
+ni documents, ni anciens dossiers. Il remplace les références des rôles exportés
+à `agents/<nom>/livrables` par `docs/livrables/<nom>` : la migration des livrables
+et des références communes est séparée et nécessite l'accord humain.
+Relire le profil fusionné. Valider les nouvelles sessions, puis seulement
+archiver/retirer les anciens dossiers sur accord. Les deux formes restent lues.
+Sur une équipe compacte, les nouveaux agents gardent la forme compacte.
+
+**Architecture historique, encore prise en charge.**
 `agents/<nom>/` porte le RÔLE de l'agent (`AGENTS.md`) et son périmètre ;
 `.github/agents/<nom>.agent.md` est son PROFIL, ce qui le fait apparaître dans
 le menu d'agent de l'app. Le profil reste court et ne recopie pas le rôle : le

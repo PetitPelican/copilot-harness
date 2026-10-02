@@ -158,7 +158,10 @@ pub fn lot(depart: &Path) -> String {
     };
     let p: Vec<String> = rel.components()
         .map(|c| c.as_os_str().to_string_lossy().to_string()).collect();
-    if p.len() >= 2 && p[0] == "agents" { format!("{}/{}", p[0], p[1]) } else { String::new() }
+    if p.len() >= 2 && p[0] == "agents" { format!("{}/{}", p[0], p[1]) }
+    else if p.len() >= 3 && p[0] == "brain" && p[1] == "mind" {
+        format!("brain/mind/{}", p[2])
+    } else { String::new() }
 }
 
 /// LA FORME D'UN PROJET — une valeur, plus une déduction.

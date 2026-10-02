@@ -22,6 +22,7 @@ déjà monté n'est pas un outil, c'est un savoir-faire.
 harnais adopte                     # dit ce qu'il poserait, n'écrit rien
 harnais adopte --go                # écrit
 harnais adopte --equipe PO,QA,OPS --go
+harnais adopte --equipe OPS,PO,QA --compact  # profils-rôles uniques, à blanc
 harnais adopte --code "<chemin du code>" --go   # code existant ailleurs
 ```
 
@@ -53,7 +54,17 @@ Copilot lit ces réglages à la racine du dépôt git, pas dans un sous-dossier
 pas à activer le paquet et ses hooks ; vérifier le briefing et la garde avant
 de conclure que l'installation sert vraiment.
 
-En équipe : un jeu d'état **par agent** sous `brain/mind/<nom>/`, un dossier
+En équipe compacte (`--compact`, 0.17.0) : un jeu d'état sous
+`brain/mind/<nom>/`, le profil ET rôle dans `.github/agents/<slug>.agent.md`,
+le périmètre dans `.github/copilot/perimetres/<slug>.json`.
+QA est sans écriture ; les autres périmètres protègent les mémoires et
+livrables des pairs et les configurations communes, mais restent à compléter
+pour le code propre au projet. Les livrables sont prévus sous
+`docs/livrables/<nom>/` ; aucun dossier `agents/` n'est créé.
+Une équipe historique se migre par `equipe --compact`, pas par une adoption
+qui écraserait ses personnalisations.
+
+En équipe historique : un jeu d'état **par agent** sous `brain/mind/<nom>/`, un dossier
 d'agent par nom avec son `AGENTS.md` et `.github/copilot/perimetre.json`,
 et `brain/fact/roles.md`. L'activation du plugin reste unique à la racine git.
 

@@ -119,8 +119,23 @@ pub fn perimetre(d: &Path) -> Result<Vec<PathBuf>, String> {
 }
 
 /// Les entrées de `deny` TELLES QU'ÉCRITES — pour les réécrire, pas pour garder.
+pub fn fichier_perimetre(d: &Path) -> PathBuf {
+    if let Ok(arbre) = racine_git(d) {
+        let lot = crate::memoire::lot(d);
+        if let Some((_, nom)) = lot.rsplit_once('/') {
+            if crate::agent::compact(&arbre, nom) {
+                return crate::agent::perimetre_compact(&arbre, nom);
+            }
+        }
+    }
+    d.join(".github/copilot/perimetre.json")
+}
+
 pub fn lis_deny(d: &Path) -> Result<Vec<PathBuf>, String> {
-    let p = d.join(".github/copilot/perimetre.json");
+    let p = fichier_perimetre(d);
+    if !p.is_file() && p.parent().is_some_and(|d| d.ends_with(".github/copilot/perimetres")) {
+        return Err(format!("{} : périmètre compact absent ; écriture refusée", p.display()));
+    }
     if !p.is_file() { return Ok(Vec::new()); }
     let v: Value = serde_json::from_str(&std::fs::read_to_string(&p).map_err(|e| e.to_string())?)
         .map_err(|e| format!("{} : {e}", p.display()))?;
@@ -128,6 +143,18 @@ pub fn lis_deny(d: &Path) -> Result<Vec<PathBuf>, String> {
     deny.iter()
         .map(|v| v.as_str().map(PathBuf::from).ok_or_else(|| format!("{} : deny doit contenir des chemins", p.display())))
         .collect()
+}
+
+pub fn lis_allow(d: &Path) -> Result<Option<Vec<PathBuf>>, String> {
+    let p = fichier_perimetre(d);
+    if !p.parent().is_some_and(|d| d.ends_with(".github/copilot/perimetres")) { return Ok(None); }
+    let t = std::fs::read_to_string(&p).map_err(|e| format!("{} : {e}", p.display()))?;
+    let v: Value = serde_json::from_str(&t).map_err(|e| format!("{} : {e}", p.display()))?;
+    let liste = v.get("allow").and_then(Value::as_array)
+        .ok_or_else(|| format!("{} : allow doit être une liste en architecture compacte", p.display()))?;
+    liste.iter().map(|v| v.as_str().filter(|s| !s.trim().is_empty()).map(PathBuf::from)
+        .ok_or_else(|| format!("{} : allow doit contenir des chemins non vides", p.display())))
+        .collect::<Result<Vec<_>, _>>().map(Some)
 }
 
 /// CE QUE LA GARDE REFUSE : le périmètre posé sur la copie courante, ET le même
@@ -204,7 +231,11 @@ pub fn decision(charge: &Value, lancement: &Path) -> Result<Option<String>, Stri
     let nom = charge.get("tool_name").or_else(|| charge.get("toolName")).and_then(Value::as_str).unwrap_or("");
     if !["Edit", "Write", "edit", "create", "apply_patch", "str_replace_editor"].contains(&nom) { return Ok(None); }
     let denies = perimetre_garde(lancement)?;
-    if denies.is_empty() { return Ok(None); }
+    let copie = racine_git(lancement).ok();
+    let principal = crate::memoire::racine_depot(lancement);
+    let allow = lis_allow(lancement)?.map(|v| v.iter()
+        .map(|x| ancre(x, copie.as_deref(), principal.as_deref())).collect::<Vec<_>>());
+    if denies.is_empty() && allow.is_none() { return Ok(None); }
     let args = charge.get("tool_input").or_else(|| charge.get("toolArgs"));
     let args_texte: Value = match args {
         Some(Value::String(s)) if s.trim_start().starts_with("*** Begin Patch") =>
@@ -235,6 +266,11 @@ pub fn decision(charge: &Value, lancement: &Path) -> Result<Option<String>, Stri
     for chemin in chemins {
         let chemin = Path::new(chemin);
         let chemin = if chemin.is_absolute() { chemin.to_path_buf() } else { base.join(chemin) };
+        if let Some(allow) = &allow {
+            if !allow.iter().any(|a| dedans(&chemin, a)) {
+                return Ok(Some(format!("Écriture refusée hors périmètre autorisé : {}", chemin.display())));
+            }
+        }
         for interdit in &denies {
             if dedans(&chemin, interdit) {
                 return Ok(Some(format!("Écriture refusée hors périmètre : {} (dossier interdit : {})", chemin.display(), interdit.display())));

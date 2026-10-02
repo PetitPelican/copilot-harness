@@ -64,12 +64,12 @@ pub fn suffixe_agent(racine: &Path, projet: Option<&str>) -> String {
         Err(_) => return String::new(),
     };
     let parts: Vec<_> = rel.components().map(|c| c.as_os_str().to_string_lossy().to_string()).collect();
-    if parts.len() != 2 || parts[0] != "agents" {
-        return String::new();
-    }
+    let nom = if parts.len() == 2 && parts[0] == "agents" { &parts[1] }
+        else if parts.len() == 3 && parts[0] == "brain" && parts[1] == "mind" { &parts[2] }
+        else { return String::new(); };
     let mut out = String::new();
     let mut tiret = false;
-    for c in parts[1].chars() {
+    for c in nom.chars() {
         if c.is_ascii_alphanumeric() || c == '.' || c == '_' || c == '-' {
             out.push(c);
             tiret = false;
@@ -222,6 +222,7 @@ mod essais {
         assert_eq!(suffixe_agent(r, Some("/tmp/projet")), "",
                    "mono-agent : le nom de fichier ne change pas");
         assert_eq!(suffixe_agent(r, Some("/tmp/projet/agents/Projet PO")), "-Projet-PO");
+        assert_eq!(suffixe_agent(r, Some("/tmp/projet/brain/mind/Projet PO")), "-Projet-PO");
         assert_eq!(suffixe_agent(r, Some("/tmp/projet/autre/chose")), "");
         assert_eq!(suffixe_agent(r, Some("/ailleurs")), "");
     }

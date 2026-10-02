@@ -193,6 +193,41 @@ try {
             $probe = Run -Arguments @('agent', '--session', 'app-1', '--racine', $session)
             Assert ($probe -match 'actif   : QA') 'sonde agent incoherente'
             Invoke-Git -Arguments @('worktree', 'remove', '--force', $session)
+            $memoryBefore = Get-FileHash 'brain\mind\OPS\state.md', 'brain\mind\OPS\todo.md', 'brain\mind\QA\state.md', 'brain\mind\QA\todo.md'
+            $compactPreview = Run -Arguments @('equipe', '--project-root', $team, '--compact')
+            Assert ($compactPreview -match 'ROLE-OPS-TEST') 'preview compact sans role complet'
+            Assert (-not (Test-Path '.github\copilot\perimetres')) 'preview compact a ecrit'
+            Run -Arguments @('equipe', '--project-root', $team, '--compact', '--apply') | Out-Null
+            $memoryAfter = Get-FileHash 'brain\mind\OPS\state.md', 'brain\mind\OPS\todo.md', 'brain\mind\QA\state.md', 'brain\mind\QA\todo.md'
+            Assert (($memoryBefore.Hash -join ',') -eq ($memoryAfter.Hash -join ',')) 'export compact modifie la memoire'
+            Assert ((Get-Content '.github\agents\ops.agent.md' -Raw) -match 'ROLE-OPS-TEST') 'role compact absent du profil'
+            $qaDeny = (Get-Content '.github\copilot\perimetres\qa.json' -Raw | ConvertFrom-Json).deny
+            Assert (@($qaDeny) -contains '.') 'QA compact nest pas sans ecriture'
+            # Retrait seulement des dossiers de ce projet synthetique jetable.
+            Remove-Item -LiteralPath (Join-Path $team 'agents\OPS') -Recurse -Force
+            Remove-Item -LiteralPath (Join-Path $team 'agents\QA') -Recurse -Force
+            Invoke-Git -Arguments @('add', '-A')
+            Invoke-Git -Arguments @('commit', '-qm', 'compact')
+            Invoke-Git -Arguments @('worktree', 'add', '--detach', '-q', $session)
+            $compactJournal = Join-Path $env:COPILOT_HOME 'session-state\app-compact\events.jsonl'
+            New-Item -ItemType Directory -Path (Split-Path $compactJournal) -Force | Out-Null
+            [IO.File]::WriteAllText($compactJournal, '{"type":"subagent.selected","data":{"agentName":"ops"}}' + "`n")
+            $compactStart = @{ hook_event_name = 'SessionStart'; session_id = 'app-compact'; cwd = $session }
+            $compactBrief = (Hook 'briefing' $compactStart | ConvertFrom-Json).additionalContext
+            Assert ($compactBrief -match 'agent  : OPS') 'agent compact non reconnu sans ancien dossier'
+            Assert ($compactBrief -match 'brain[\\/]mind[\\/]OPS') 'memoire compacte non servie'
+            Assert ($compactBrief -notmatch 'ROLE-OPS-TEST') 'role du menu recopie par le briefing'
+            $compactWrite = @{ cwd = $session; sessionId = 'app-compact'; toolName = 'create'; toolArgs = @{ path = 'brain/mind/QA/todo.md' } }
+            Assert (((Hook 'perimetre' $compactWrite | ConvertFrom-Json).permissionDecision) -eq 'deny') 'garde compacte laisse passer chez QA'
+            $compactWrite.toolArgs.path = 'docs/livrables/OPS/permis.md'
+            Assert ((Hook 'perimetre' $compactWrite) -eq '') 'garde compacte refuse les livrables OPS'
+            [IO.File]::AppendAllText($compactJournal, '{"type":"subagent.deselected","data":{}}' + "`n")
+            $compactPrompt = @{ sessionId = 'app-compact'; cwd = $session; prompt = 'x'; transformedPrompt = 'x' }
+            $compactDefault = (Hook 'briefing' $compactPrompt | ConvertFrom-Json).modifiedTransformedPrompt
+            Assert ($compactDefault -match 'ROLE-QA-TEST') 'role QA compact par defaut absent'
+            $compactWrite.toolArgs.path = 'brain/mind/QA/todo.md'
+            Assert (((Hook 'perimetre' $compactWrite | ConvertFrom-Json).permissionDecision) -eq 'deny') 'QA compact ecrit sa memoire'
+            Invoke-Git -Arguments @('worktree', 'remove', '--force', $session)
         } finally { Pop-Location }
         if ($Copilot) {
             $instructions = Invoke-Copilot -Arguments @('instruction', 'list', '--json')
@@ -212,7 +247,7 @@ try {
         }
         Invoke-Git -Arguments @('worktree', 'remove', '--force', $copy)
     } finally { Pop-Location }
-    Write-Output 'PASS: atelier, accueil/declaration/restart, adoption partielle, idempotence, briefing/session/refresh, worktree/equipe-vue/agent, gardes, journal, choix d agent (menu, Default agent -> QA, copie).'
+    Write-Output 'PASS: atelier, accueil/declaration/restart, adoption partielle, idempotence, briefing/session/refresh, worktree/equipe-vue/agent, gardes, journal, choix d agent, export compact, memoire preservee, profils sans anciens dossiers et QA sans ecriture.'
     if ($Copilot) { Write-Output 'PASS: decouverte CLI des instructions et des huit skills (sans inference).' }
 } finally {
     foreach ($n in $names) { [Environment]::SetEnvironmentVariable($n, $saved[$n], 'Process') }

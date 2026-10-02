@@ -61,6 +61,14 @@ tableau de bord vivant. Elle porte sa date en tête.
 
 ## Ce que le diagnostic lit
 
+Depuis 0.17.0 il lit aussi l'architecture compacte :
+`.github/agents/<slug>.agent.md` (profil et rôle),
+`.github/copilot/perimetres/<slug>.json` (garde),
+`brain/mind/<nom>/` (mémoire). Aucun dossier `agents/<nom>/` n'est requis.
+Les traces d'entrée d'un agent compact sont rattachées à son contexte mémoire,
+dans chaque copie de travail ; une ancienne trace de lancement ne prouve pas
+le nouveau branchement.
+
 - **La mémoire, par la même règle que le briefing** : `brain/`, l'organisation
   d'avant (`.fact/` et `.mind/` en place, ou déportés dans `memoire/`), et les
   projets à cheval entre les deux. À plusieurs agents, l'état de chacun est

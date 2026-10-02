@@ -1307,6 +1307,7 @@ fn nom_agent(racine: &Path) -> String {
             let parts: Vec<String> = rel.components()
                 .map(|c| c.as_os_str().to_string_lossy().to_string()).collect();
             if parts.len() == 2 && parts[0] == "agents" { return parts[1].clone(); }
+            if parts.len() == 3 && parts[0] == "brain" && parts[1] == "mind" { return parts[2].clone(); }
         }
     }
     p.file_name().unwrap_or_default().to_string_lossy().to_string()
@@ -3290,4 +3291,3 @@ mod essais_rappels_croises {
         let _ = std::fs::remove_dir_all(&d);
     }
 }
-

@@ -177,6 +177,7 @@ fn instructions(f: &Path, projet: &Path) -> Result<Option<String>, String> {
 
 pub fn main(args: &[String]) -> i32 {
     let go = args.iter().any(|a| a == "--go" || a == "--apply");
+    let demande_compact = args.iter().any(|a| a == "--compact");
     let equipe: Vec<String> = args.iter()
         .position(|a| a == "--equipe")
         .and_then(|i| args.get(i + 1))
@@ -243,6 +244,7 @@ pub fn main(args: &[String]) -> i32 {
 
     let fact = racine.join("brain/fact");
     let mind = racine.join("brain/mind");
+    let compact = demande_compact || equipe.iter().any(|n| crate::agent::compact(&racine, n));
 
     let c = base_md(&nom);
     rap.pose(fact.join("base.md"), "le cap du projet, et ce qu'il est", &c);
@@ -283,6 +285,31 @@ pub fn main(args: &[String]) -> i32 {
             ecrits.push((mind.join(a).join("state.md"), c));
             rap.pose(mind.join(a).join("todo.md"), &format!("ce qui attend {a}"), TODO_MD);
             ecrits.push((mind.join(a).join("todo.md"), TODO_MD.into()));
+            if compact {
+                let profil = crate::agent::profil(&racine, a);
+                let slug = crate::agent::nom_de_profil(a);
+                if slug.is_empty() || equipe.iter().filter(|n| crate::agent::nom_de_profil(n) == slug).count() != 1 {
+                    eprintln!("adopte : nom de profil vide ou en collision : {a}"); return 1;
+                }
+                let c = format!("---\nname: {slug}\ndescription: Agent {a} — rôle propre au projet\n---\n\
+Lis brain/mind/{a}/state.md et brain/mind/{a}/todo.md à la reprise.\n\n\
+<!-- harnais:role:start -->\n{}<!-- harnais:role:end -->\n", agents_md_agent(a, &nom));
+                rap.pose(profil.clone(), &format!("profil et rôle uniques de {a}"), &c);
+                ecrits.push((profil, c));
+                let garde = crate::agent::perimetre_compact(&racine, a);
+                let mut denies = vec![".github".to_string(), "brain/fact".into(), "brain/poids.json".into()];
+                for n in equipe.iter().filter(|n| *n != a) {
+                    denies.push(format!("brain/mind/{n}"));
+                    denies.push(format!("docs/livrables/{n}"));
+                }
+                if a.eq_ignore_ascii_case("QA") { denies.push(".".into()); }
+                let allow = if a.eq_ignore_ascii_case("QA") { vec![] }
+                    else { vec![format!("brain/mind/{a}"), format!("docs/livrables/{a}")] };
+                let c = serde_json::json!({"allow": allow, "deny": denies}).to_string() + "\n";
+                rap.pose(garde.clone(), &format!("périmètre centralisé de {a}"), &c);
+                ecrits.push((garde, c));
+                continue;
+            }
             let d = racine.join("agents").join(a);
             let c = agents_md_agent(a, &nom);
             if d.join("CLAUDE.md").exists() {
@@ -401,6 +428,31 @@ mod essais {
         let _ = std::process::Command::new("git").args(["init", "-q", "-b", "main"])
             .current_dir(&d).output();
         d
+    }
+
+    #[test]
+    fn adoption_compacte_additive_sans_dossier_agents() {
+        let d = bac("compact");
+        let args = vec![d.display().to_string(), "--equipe".into(), "OPS,PO,QA".into(), "--compact".into()];
+        assert_eq!(main(&args), 0);
+        assert!(!d.join("brain").exists());
+        let mut args = args;
+        args.push("--go".into());
+        assert_eq!(main(&args), 0);
+        assert!(!d.join("agents").exists());
+        for n in ["OPS", "PO", "QA"] {
+            let esprit = d.join("brain/mind").join(n);
+            assert!(esprit.join("state.md").is_file());
+            assert!(esprit.join("todo.md").is_file());
+            assert!(crate::agent::profil(&d, n).is_file());
+            assert!(crate::agent::perimetre_compact(&d, n).is_file());
+        }
+        let qa = d.join("brain/mind/QA");
+        assert!(crate::copilot::lis_deny(&qa).unwrap().contains(&PathBuf::from(".")));
+        std::fs::write(crate::agent::profil(&d, "OPS"), "personnalisé").unwrap();
+        assert_eq!(main(&args), 0);
+        assert_eq!(std::fs::read_to_string(crate::agent::profil(&d, "OPS")).unwrap(), "personnalisé");
+        std::fs::remove_dir_all(&d).unwrap();
     }
 
     /// UN CODE QUI VIT AILLEURS : son adresse entre dans les faits, rien n'entre

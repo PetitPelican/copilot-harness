@@ -225,7 +225,7 @@ fn lancement(p: &Path, l: &Path, nom: Option<String>, cps: &[PathBuf], ins: &Ins
         if s.get("enabledPlugins").and_then(|e| e.get(crate::copilot::PAQUET))
             .and_then(Value::as_bool) == Some(true) { declare = "paquet"; }
     }
-    let deny = crate::copilot::perimetre(l).ok().map(|d| d.len());
+    let deny = crate::copilot::lis_allow(l).and_then(|_| crate::copilot::perimetre(l)).ok().map(|d| d.len());
     let (mut inscrit, mut inscrite) = match ins {
         Inscriptions::Illisibles => (None, None),
         Inscriptions::Toutes(v) => (Some(true), v.clone()),
@@ -252,8 +252,8 @@ fn lancement(p: &Path, l: &Path, nom: Option<String>, cps: &[PathBuf], ins: &Ins
 
 fn harnais(p: &Path, ins: &Inscriptions) -> Harnais {
     let p = &p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
-    let agents: Vec<PathBuf> = trie(&p.join("agents")).into_iter()
-        .filter(|d| d.is_dir() && (d.join("AGENTS.md").is_file() || d.join("CLAUDE.md").is_file() || d.join(".github/copilot").is_dir())).collect();
+    let agents: Vec<PathBuf> = crate::agent::agents_du_projet(p).iter()
+        .map(|n| crate::agent::contexte(p, n)).collect();
     let dossiers: Vec<(Option<String>, PathBuf)> = if agents.is_empty() { vec![(None, p.clone())] }
         else { agents.iter().map(|d| (Some(nom(d)), d.clone())).collect() };
     let r = crate::memoire::resous(&dossiers[0].1);
@@ -533,7 +533,8 @@ fn terminal(projets: &[Projet], racine: &Path) {
         println!("     mémoire: {} · {} · .logs {} · git {}", forme_mot(h), jauge(h), h.logs, oui(h.git));
         for l in &h.lancements { println!("     paquet : {}", ligne_paquet(l)); }
         for l in &h.lancements {
-            let d = if let Some(n) = &l.nom { racine.join(&p.nom).join("agents").join(n) } else { racine.join(&p.nom) };
+            let base = racine.join(&p.nom);
+            let d = if let Some(n) = &l.nom { crate::agent::contexte(&base, n) } else { base };
             if crate::copilot::ancien_paquet(&d) { println!("     ATTENTION : {} déclare encore harnais@atelier (risque de double chargement)", d.join(".claude/settings.json").display()); }
             if d != racine.join(&p.nom) && crate::copilot::settings(&d).is_file() { println!("     ATTENTION : {} est inerte hors de la racine Git", crate::copilot::settings(&d).display()); }
         }
@@ -665,7 +666,8 @@ ouverte. Deux lectures possibles : rien n'attend, ou personne n'en a déclaré.<
             e(get(ch, "maj").filter(|s| !s.is_empty()).unwrap_or("—")), e(get(ch, "sante").filter(|s| !s.is_empty()).unwrap_or("—")),
             non(h.git, "git"), e(forme_mot(h)), e(&jauge(h)), h.logs));
         for l in &h.lancements {
-            let d = if let Some(n) = &l.nom { racine.join(&p.nom).join("agents").join(n) } else { racine.join(&p.nom) };
+            let base = racine.join(&p.nom);
+            let d = if let Some(n) = &l.nom { crate::agent::contexte(&base, n) } else { base };
             if crate::copilot::ancien_paquet(&d) { c.push(format!("<div class=\"conseil\">ATTENTION : {} déclare encore harnais@atelier (double chargement possible)</div>", e(&d.join(".claude/settings.json").display().to_string()))); }
             if d != racine.join(&p.nom) && crate::copilot::settings(&d).is_file() { c.push(format!("<div class=\"conseil\">ATTENTION : {} est inerte hors de la racine Git</div>", e(&crate::copilot::settings(&d).display().to_string()))); }
             let servi = l.trace.is_some();
@@ -975,6 +977,32 @@ mod essais {
         assert_eq!(x, "incomplet");
         assert!(c.contains("brain/mind/Beta/todo.md"), "{c}");
         let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn equipe_compacte_est_vue_sans_ancien_dossier() {
+        let d = dossier("compact", true);
+        for f in crate::socle::faits_tous() { ecris(&d, &format!("brain/fact/{f}"), "x\n"); }
+        let v = courante();
+        let mut contextes = vec![];
+        branche(&d, DECLARE);
+        for n in ["OPS", "QA"] {
+            for f in MIND_ATTENDU { ecris(&d, &format!("brain/mind/{n}/{f}"), "x\n"); }
+            ecris(&d, &format!(".github/agents/{}.agent.md", crate::agent::nom_de_profil(n)), "---\nname: essai\n---\nrôle\n");
+            ecris(&d, &format!(".github/copilot/perimetres/{}.json", crate::agent::nom_de_profil(n)), r#"{"allow":[],"deny":["."]}"#);
+            let contexte = crate::agent::contexte(&d, n);
+            trace(&contexte, &v);
+            contextes.push(contexte);
+        }
+        let ins = inscrit(&[&contextes[0], &contextes[1]], &v);
+        let h = harnais(&d, &ins);
+        assert_eq!(h.lancements.len(), 2);
+        assert!(jauge(&h).contains("état 4/4"));
+        assert_eq!(verdict(&h).0, "ok");
+        assert!(!d.join("agents").exists());
+        fs::remove_file(crate::agent::perimetre_compact(&d, "QA")).unwrap();
+        assert_eq!(juge(&d, &ins).0, "sans-deny");
+        fs::remove_dir_all(&d).unwrap();
     }
 
     /// Un agent qui se lance depuis une copie de travail n'a, dans l'arbre

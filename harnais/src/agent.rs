@@ -217,7 +217,35 @@ pub fn agents_du_projet(arbre: &Path) -> Vec<String> {
                  || arbre.join("memoire/agents").join(n).join(".mind").is_dir())
         .collect()).unwrap_or_default();
     v.sort();
+    if let Ok(it) = std::fs::read_dir(arbre.join("brain/mind")) {
+        for e in it.flatten().filter(|e| e.path().is_dir()) {
+            let n = e.file_name().to_string_lossy().to_string();
+            if profil(arbre, &n).is_file() && !v.contains(&n) { v.push(n); }
+        }
+    }
+    v.sort();
     v
+}
+
+pub fn profil(arbre: &Path, nom: &str) -> PathBuf {
+    arbre.join(".github/agents").join(format!("{}.agent.md", nom_de_profil(nom)))
+}
+
+pub fn perimetre_compact(arbre: &Path, nom: &str) -> PathBuf {
+    arbre.join(".github/copilot/perimetres").join(format!("{}.json", nom_de_profil(nom)))
+}
+
+pub fn compact(arbre: &Path, nom: &str) -> bool {
+    perimetre_compact(arbre, nom).exists()
+        || std::fs::read_to_string(profil(arbre, nom)).ok()
+            .is_some_and(|t| t.contains("<!-- harnais:role:start -->"))
+        || (!arbre.join("agents").join(nom).is_dir() && profil(arbre, nom).is_file())
+}
+
+/// Le contexte du hook n'est pas le dossier de travail de Copilot.
+pub fn contexte(arbre: &Path, nom: &str) -> PathBuf {
+    if compact(arbre, nom) { arbre.join("brain/mind").join(nom) }
+    else { arbre.join("agents").join(nom) }
 }
 
 /// Le nom de profil d'un agent : celui que `harnais equipe` écrit dans
@@ -244,7 +272,8 @@ pub fn resous(reel: &Path, lecture: Lecture) -> Session {
                           actif: None, source: Source::Aucun, lecture, place: None };
     let Some(arbre) = arbre else { return s };
     if agents.is_empty() { return s; }
-    let dossier = crate::memoire::lot(reel).strip_prefix("agents/").map(String::from)
+    let lot = crate::memoire::lot(reel);
+    let dossier = lot.rsplit_once('/').map(|(_, n)| n.to_string())
         .filter(|n| agents.contains(n));
     match s.lecture.choix.clone() {
         Choix::Agent { nom, ligne } => match correspond(&nom, &agents) {
@@ -265,7 +294,7 @@ pub fn resous(reel: &Path, lecture: Lecture) -> Session {
     // Se placer, sauf si la session est DÉJÀ dans ce dossier.
     if let (Some(a), Source::Menu { .. } | Source::Defaut { .. }) = (&s.actif, &s.source) {
         if dossier.as_deref() != Some(a.as_str()) {
-            let cible = arbre.join("agents").join(a);
+            let cible = contexte(&arbre, a);
             if cible.is_dir() { s.place = Some(cible); }
         }
     }
@@ -368,11 +397,35 @@ gardé. Les agents : {liste}."));
     // Le rôle n'est servi que si la session n'est PAS dans le dossier de
     // l'agent : là, Copilot le charge déjà, et le servir deux fois le paierait
     // deux fois.
-    if let (Some(a), Some(arbre), Some(_)) = (&s.actif, &s.arbre, &s.place) {
-        let dossier = arbre.join("agents").join(a);
+    if let (Some(a), Some(arbre)) = (&s.actif, &s.arbre) {
+        if s.place.is_none() && !compact(arbre, a) { return (tete, fin); }
+        if compact(arbre, a) && matches!(s.source, Source::Menu { .. }) {
+            let p = profil(arbre, a);
+            tete.push(if p.is_file() {
+                format!("         Rôle : {} — profil choisi dans le menu ; non recopié par le briefing.",
+                    crate::socle::chemin_affiche(&s.reel, &p))
+            } else { format!("         Rôle ABSENT : {} ; restaurer le profil avant de travailler.", p.display()) });
+            return (tete, fin);
+        }
+        let dossier = contexte(arbre, a);
         let base = s.reel.canonicalize().unwrap_or_else(|_| s.reel.clone());
         let affiche = |p: &Path| crate::socle::chemin_affiche(&base, p);
-        match role(&dossier) {
+        let role_actif = if compact(arbre, a) {
+            let p = profil(arbre, a);
+            match std::fs::read_to_string(&p) {
+                Ok(t) => {
+                    let t = t.strip_prefix("---\r\n").and_then(|t| t.split_once("\r\n---\r\n").map(|(_, b)| b))
+                        .or_else(|| t.strip_prefix("---\n").and_then(|t| t.split_once("\n---\n").map(|(_, b)| b)))
+                        .unwrap_or(&t).to_string();
+                    Some((p, t))
+                },
+                Err(e) => {
+                    tete.push(format!("         Profil illisible : {} : {e}", p.display()));
+                    None
+                }
+            }
+        } else { role(&dossier) };
+        match role_actif {
             Some((p, t)) => {
                 let (texte, coupe) = borne(&t);
                 fin.push(format!("── Ton rôle · {} — relu à l'instant ──", affiche(&p)));
