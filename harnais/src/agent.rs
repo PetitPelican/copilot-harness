@@ -235,10 +235,15 @@ pub fn perimetre_compact(arbre: &Path, nom: &str) -> PathBuf {
     arbre.join(".github/copilot/perimetres").join(format!("{}.json", nom_de_profil(nom)))
 }
 
-/// Où un agent compact dépose ce qu'il produit : un dossier par agent, sous
-/// `brain/`. C'est le SEUL endroit où ce chemin est écrit ; la garde de commit
-/// l'ignore comme `docs/` (un livrable en `.sql` n'est pas du code projet).
-pub const BANC: &str = "brain/workbench";
+/// Où un agent compact dépose ce qu'il produit : un dossier par agent, à la
+/// racine du projet, hors de `brain/` qui ne porte que la mémoire. C'est le SEUL
+/// endroit où ce chemin est écrit ; la garde de commit l'ignore comme `docs/`
+/// (un livrable en `.sql` n'est pas du code projet).
+pub const BANC: &str = "outputs";
+
+/// Ancien emplacement (0.19 à 1.1), sous `brain/`. Lu par la garde de commit
+/// seulement, pour qu'un projet pas encore migré garde ses livrables hors du code.
+pub const BANC_ANCIEN: &str = "brain/workbench";
 
 pub fn banc(nom: &str) -> String {
     format!("{BANC}/{nom}")

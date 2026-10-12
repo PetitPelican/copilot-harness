@@ -467,13 +467,13 @@ mod essais {
             assert_eq!(crate::copilot::lis_allow(&c).unwrap(), None, "{n} n'a pas de liste autorisée");
             let ecrit = |f: &str| crate::copilot::decision(
                 &serde_json::json!({"tool_name":"Write","tool_input":{"file_path":d.join(f)}}), &c).unwrap();
-            assert!(ecrit(&format!("brain/workbench/{n}/a.md")).is_none());
+            assert!(ecrit(&format!("outputs/{n}/a.md")).is_none());
             assert!(ecrit(".github/workflows/ci.yml").is_none(), "la CI appartient au projet");
             assert!(ecrit(".github/mcp.json").is_none(), "la config MCP aussi");
             assert!(ecrit("src/code.py").is_none());
             let pair = if n == "OPS" { "PO" } else { "OPS" };
             assert!(ecrit(&format!("brain/mind/{pair}/todo.md")).is_some(), "le territoire d'un pair est refusé");
-            assert!(ecrit(&format!("brain/workbench/{pair}/a.md")).is_some());
+            assert!(ecrit(&format!("outputs/{pair}/a.md")).is_some());
             assert!(ecrit("brain/fact/base.md").is_some(), "les faits n'ont qu'un écrivain");
             assert!(ecrit(&format!(".github/agents/{}.agent.md", n.to_lowercase())).is_some(), "le rôle n'est pas modifiable par l'agent");
         }
