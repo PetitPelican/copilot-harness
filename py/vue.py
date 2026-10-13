@@ -2,9 +2,8 @@
 """LA VUE D'ÉQUIPE — lit la mémoire de tous les projets d'un atelier et en rend
 deux vues : le rapport terminal (le DIAGNOSTIC) et une page autonome (la VUE).
 
-Port de `harnais/src/vue.rs` (Rust, 0.12.8), à l'octet. Le Rust l'avait porté
-de `agentic-team.py` le 11/09/2026 ; le Python revient ici, le Rust reste la
-spécification.
+Port de `harnais/src/vue.rs` (Rust, Copilot 1.3.0), à l'octet : le Rust reste
+la spécification. Il avait été porté de `agentic-team.py`.
 
     harnais equipe-vue                     le rapport terminal
     harnais equipe-vue --html team.html    une page autonome
@@ -14,14 +13,13 @@ spécification.
 sans que personne le voie. **Strictement en lecture** : n'écrit que la page
 demandée. La page est **autonome** — ni serveur, ni ressource externe.
 
-LA LECTURE A ÉTÉ REFAITE LE 11/09/2026, et c'est dit. Le portage gardait à
-l'octet ce que lisait le script : l'organisation d'avant, et des réglages
-qui ne veulent plus rien dire depuis le paquet. Mesuré ce jour-là — le CTO
-du PC Windows l'a vu le premier : 12 projets sur 13 classés « aucune
-mémoire », dont les deux qui étaient servis sous nos yeux, et des conseils
-qui renvoyaient à deux compétences disparues (la mise à niveau et la
-synchronisation d'avant le paquet). Un tableau de bord qui désigne presque tout
-l'atelier comme à refaire est pire qu'aucun tableau : on apprend à ne plus le lire.
+LA LECTURE A ÉTÉ REFAITE, et c'est dit : le script lisait l'organisation
+d'avant, et des réglages qui ne veulent plus rien dire depuis le paquet. Le
+garder à l'octet classerait des projets « aucune mémoire » alors qu'ils sont
+servis, et donnerait des conseils qui renvoient à deux compétences
+disparues (la mise à niveau et la synchronisation d'avant le paquet). Un
+tableau de bord qui désigne presque tout l'atelier comme à refaire est pire
+qu'aucun tableau : on apprend à ne plus le lire.
 
 CE QU'IL LIT DÉSORMAIS, et d'où :
 · la mémoire, PAR LE RÉSOLVEUR — la même règle que le briefing, toutes les
@@ -29,7 +27,7 @@ CE QU'IL LIT DÉSORMAIS, et d'où :
 · le PAQUET, dans le dossier d'où chaque agent se LANCE : la racine en mono,
   `agents/<nom>` à plusieurs — les réglages de la racine y sont inertes ;
 · trois choses séparées, parce que chacune peut manquer seule et en silence :
-  le paquet DÉCLARÉ, le projet INSCRIT (sans quoi Claude Code 2.1.268 ne le
+  le paquet DÉCLARÉ, la marketplace INSCRITE (sans quoi Copilot ne le
   charge pas), et la TRACE D'ENTRÉE qui prouve qu'il a servi, avec la
   version qui l'a écrite — toutes copies de travail confondues : un agent
   peut se lancer depuis une copie, et l'arbre principal n'a alors de lui
@@ -42,17 +40,21 @@ import re
 import sys
 import time
 
+import agent
+import briefing
+import copilot
+import hote
 import memoire
 import socle
 
 CHAMPS = ["maj", "cap", "sante", "jalon", "balle", "depuis", "attente", "suivant"]
 MIND_ATTENDU = ["state.md", "todo.md"]
-# La taxonomie d'avant le 02/09/2026, rangée dans `.memory/`.
+# La taxonomie d'avant, rangée dans `.memory/`.
 ANCIENS = ["charter.md", "business.md", "clients.md", "overview.md"]
 MONTENT = ["state.md", "rules.md", "architecture.md"]
-# `claude-harnais` est la SOURCE du paquet, pas un agent : lui conseiller
+# `copilot-harness` est la SOURCE du paquet, pas un agent : lui conseiller
 # `harnais adopte`, ce serait brancher le paquet sur son propre code.
-IGNORE = ["agentic-starter", "claude-starter", "cbascule", "claude-harnais"]
+IGNORE = ["copilot-harness"]
 DEHORS = "dehors"
 TIEDE_JOURS = 7
 PERIME_JOURS = 28
@@ -257,7 +259,7 @@ class Lancement(object):
 
     def __init__(self, nom, declare, inscrit, inscrite, trace, deny):
         self.nom = nom
-        # `paquet` · `hooks` (l'ancien câblage local) · `non`
+        # `paquet` · `non`
         self.declare = declare
         # None : les inscriptions n'ont pas pu être lues — on ne conclut rien.
         self.inscrit = inscrit
@@ -271,7 +273,7 @@ class Lancement(object):
 
 class Harnais(object):
     __slots__ = ("git", "depot", "forme", "fact_dir", "fact", "minds", "mind", "manque",
-                 "surplus", "anciens", "lancements", "oriente", "logs", "expert")
+                 "surplus", "anciens", "lancements", "oriente", "logs")
 
 
 class Illisibles(object):
@@ -289,42 +291,37 @@ class Chemins(object):
 
 
 def inscriptions():
-    """Les inscriptions au paquet, lues UNE fois par relevé. SURCHARGEABLE, et
-    uniquement pour le mesurer : sans elle, le contrôle jugerait l'état de cette
-    machine-ci au lieu de son atelier fabriqué."""
-    f = os.environ.get("HARNAIS_INSCRIPTIONS")
-    if f is None:
-        f = os.path.join(socle.maison(), ".claude/plugins/installed_plugins.json")
+    """Les inscriptions au paquet, lues UNE fois par relevé, dans les réglages de
+    l'utilisateur (`<COPILOT_HOME>/settings.json`)."""
+    f = os.path.join(hote.maison_copilot(), "settings.json")
+    if not os.path.exists(f):
+        return Chemins([])
     try:
         v = json.loads(lis(f))
     except ValueError:
         return Illisibles()
-    plugins = v.get("plugins") if isinstance(v, dict) else None
-    liste = plugins.get("harnais@atelier") if isinstance(plugins, dict) else None
-    if not isinstance(liste, list):
-        return Chemins([])
+    actif = _obj(_obj(v, "enabledPlugins"), copilot.PAQUET) is True
+    return Toutes(None) if (actif and resolu(v)) else Chemins([])
 
-    def version(e):
-        x = e.get("version") if isinstance(e, dict) else None
-        return x if isinstance(x, str) else None
-    for e in liste:
-        if isinstance(e, dict) and e.get("scope") == "user":
-            return Toutes(version(e))
-    out = []
-    for e in liste:
-        p = e.get("projectPath") if isinstance(e, dict) else None
-        if isinstance(p, str):
-            out.append((canon(p), version(e)))
-    return Chemins(out)
+
+def resolu(v):
+    """La marketplace locale est-elle résolue : un dossier déclaré qui porte le
+    manifeste du paquet, ou le paquet installé par Copilot ?"""
+    src = _obj(_obj(_obj(v, "extraKnownMarketplaces"), copilot.MARCHE), "source")
+    local = False
+    if isinstance(src, dict) and src.get("source") == "directory":
+        chemin = src.get("path")
+        local = isinstance(chemin, str) and est_fichier(os.path.join(chemin, ".github/plugin/plugin.json"))
+    return local or est_dir(os.path.join(hote.maison_copilot(), "installed-plugins/atelier-copilot/harnais"))
 
 
 def copies(p):
     """Les copies de travail du dépôt qui porte `p`, `p` compris.
 
-    Mesuré le 11/09/2026 : l'agent d'épreuve de Splide se lance depuis une copie
-    (`.worktrees/splide-audit`) ; l'arbre principal n'a de lui qu'une trace
-    d'avant la 0.10.0. Ne lire que l'arbre principal, c'était crier « jamais
-    servi » sur un agent qui tourne."""
+    Un agent peut se lancer depuis une copie de travail (par exemple
+    `.worktrees/<nom>`) ; l'arbre principal n'a alors de lui qu'une trace
+    ancienne. Ne lire que l'arbre principal, ce serait crier « jamais servi »
+    sur un agent qui tourne."""
     v = [p]
     import subprocess
     try:
@@ -363,36 +360,21 @@ def _obj(v, k):
     return v.get(k) if isinstance(v, dict) else None
 
 
-def profil_expert_du(l):
-    """`HARNAIS_PROFIL=expert` dans les réglages de ce dossier de lancement ?"""
-    for nom in ("settings.json", "settings.local.json"):
-        try:
-            s = json.loads(lis(os.path.join(l, ".claude", nom)))
-        except ValueError:
-            continue
-        v = _obj(_obj(s, "env"), "HARNAIS_PROFIL")
-        if isinstance(v, str) and v.strip() == "expert":
-            return True
-    return False
-
-
 def lancement(p, l, nom_, cps, ins):
     rel = _relatif(p, l)
     jumeaux = [c for c in (os.path.join(c, rel) if rel else c for c in cps) if est_dir(c)]
-    declare, deny = "non", None
+    declare = "non"
     try:
-        s = json.loads(lis(os.path.join(l, ".claude", "settings.json")))
-        ok = True
+        local = json.loads(lis(copilot.settings(p)))
     except ValueError:
-        s, ok = None, False
-    if ok:
-        paquet = _obj(_obj(s, "enabledPlugins"), "harnais@atelier") is True
-        h = _obj(s, "hooks")
-        crochets = json.dumps(h, separators=(",", ":"), ensure_ascii=False)
-        declare = "paquet" if paquet else ("hooks" if "mind-guard" in crochets else "non")
-        perm = _obj(s, "permissions")
-        d = _obj(perm, "deny")
-        deny = len(d) if isinstance(d, list) else 0
+        local = None
+    if _obj(_obj(local, "enabledPlugins"), copilot.PAQUET) is True:
+        declare = "paquet"
+    try:
+        copilot.lis_allow(l)
+        deny = len(copilot.perimetre(l))
+    except (copilot.Refus, OSError):
+        deny = None
     if isinstance(ins, Illisibles):
         inscrit, inscrite = None, None
     elif isinstance(ins, Toutes):
@@ -404,10 +386,17 @@ def lancement(p, l, nom_, cps, ins):
             if _cle(c) in j:
                 inscrit, inscrite = True, v
                 break
+    if declare == "paquet" and inscrit is not True:
+        try:
+            globales = json.loads(lis(os.path.join(hote.maison_copilot(), "settings.json")))
+        except ValueError:
+            globales = None
+        if (local is not None and resolu(local)) or (globales is not None and resolu(globales)):
+            inscrit, inscrite = True, None
     trace = None
     for j in jumeaux:
         try:
-            v = json.loads(lis(os.path.join(j, ".claude", ".briefing.json")))
+            v = json.loads(lis(briefing.etat_du_briefing(j)))
         except ValueError:
             continue
         d = _obj(v, "derniere")
@@ -423,9 +412,7 @@ def lancement(p, l, nom_, cps, ins):
 
 def harnais(p, ins):
     p = canon(p)
-    agents = [d for d in trie(os.path.join(p, "agents"))
-              if est_dir(d) and (est_fichier(os.path.join(d, "CLAUDE.md"))
-                                 or est_dir(os.path.join(d, ".claude")))]
+    agents = [agent.contexte(p, n) for n in agent.agents_du_projet(p)]
     if not agents:
         dossiers = [(None, p)]
     else:
@@ -453,27 +440,17 @@ def harnais(p, ins):
     def aff(d):
         return socle.chemin_affiche(p, d) + "/"
     fact = []
-    # UN EXPERT A DES FICHES LIBRES (Maxime, 12/10/2026) : son socle est la
-    # nature, les sources (ou `stack.md`), les règles ; le reste porte le nom de
-    # son métier et n'est pas « en trop ». Le profil se lit dans les réglages
-    # des dossiers d'où l'on lance ce projet.
-    expert = any(profil_expert_du(l) for (_, l) in dossiers)
+    # Les cinq noms, mono et équipe confondus (le `socle::faits_tous` du Rust).
+    faits_tous = socle.FAITS_MONO + [socle.FAITS_EQUIPE]
     if r.fact is not None:
         d = r.fact
         ici = md_de(d, "md") if est_dir(d) else []
-        if expert:
-            for a in ("base.md", "rules.md"):
-                if a not in ici:
-                    manque.append(aff(d) + a)
-            if "sources.md" not in ici and "stack.md" not in ici:
-                manque.append(aff(d) + "sources.md")
-        else:
-            for a in socle.FAITS_MONO:
-                if a not in ici:
-                    manque.append(aff(d) + a)
-            for x in ici:
-                if x not in socle.faits_tous():
-                    surplus.append(aff(d) + x)
+        for a in socle.FAITS_MONO:
+            if a not in ici:
+                manque.append(aff(d) + a)
+        for x in ici:
+            if x not in faits_tous:
+                surplus.append(aff(d) + x)
         fact = ici
     minds, mind = [], []
     for (_, l) in dossiers:
@@ -498,12 +475,14 @@ def harnais(p, ins):
             if est_fichier(os.path.join(m, "state.md")):
                 minds.append(m)
                 break
-    # Le CLAUDE.md nomme-t-il la mémoire ? Les `@imports` comptent. Depuis le
+    # Les instructions du projet (`AGENTS.md`, ou un `CLAUDE.md` que Copilot lit
+    # aussi) nomment-elles la mémoire ? Les `@imports` comptent. Depuis le
     # briefing c'est une information, plus un verdict : le harnais sert
     # l'index de la mémoire à l'entrée, qu'il la nomme ou non.
     oriente = False
-    if est_fichier(os.path.join(p, "CLAUDE.md")):
-        vu, restants = [], [os.path.join(p, "CLAUDE.md")]
+    if est_fichier(os.path.join(p, "AGENTS.md")) or est_fichier(os.path.join(p, "CLAUDE.md")):
+        depart = "AGENTS.md" if est_fichier(os.path.join(p, "AGENTS.md")) else "CLAUDE.md"
+        vu, restants = [], [os.path.join(p, depart)]
         while len(vu) < 8 and restants:
             f = restants.pop()
             if f in vu or not est_fichier(f):
@@ -526,7 +505,6 @@ def harnais(p, ins):
     h.minds, h.mind, h.manque, h.surplus, h.anciens = minds, mind, manque, surplus, anciens
     h.lancements = [lancement(p, l, n, cps, ins) for (n, l) in dossiers]
     h.oriente = oriente
-    h.expert = expert
     logs = os.path.join(p, ".logs")
     h.logs = len(md_de(logs, "md")) if est_dir(logs) else 0
     return h
@@ -543,16 +521,8 @@ def jauge(h):
     equipe = any(l.nom is not None for l in h.lancements)
     agents = " · %d agent(s)" % n if equipe else ""
     # À plusieurs, les faits en tiennent un de plus : qui tient quoi.
-    attendus = socle.FAITS_MONO + ([socle.FAITS_EQUIPE] if equipe else [])
-    # `workflow.md` (commun depuis le 12/10/2026) n'entre pas dans le compte :
-    # « 6/5 » se lirait comme une anomalie. Un fichier en TROP, lui, y entre —
-    # « 5/4 » est le signal (témoin `vue-equipe`, cas « surplus »). Un expert
-    # tient des fiches libres : seuls les noms attendus comptent chez lui.
-    if getattr(h, "expert", False):
-        tenus = len([x for x in h.fact if x in attendus])
-    else:
-        tenus = len([x for x in h.fact if x not in socle.FAITS_COMMUNS])
-    return "faits %d/%d · état %d/%d%s" % (tenus, len(attendus), len(h.mind), len(MIND_ATTENDU) * n, agents)
+    attendus = len(socle.FAITS_MONO) + (1 if equipe else 0)
+    return "faits %d/%d · état %d/%d%s" % (len(h.fact), attendus, len(h.mind), len(MIND_ATTENDU) * n, agents)
 
 
 def numeros(v):
@@ -580,7 +550,7 @@ def version_annoncee():
         racine = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         version = "inconnue"
         try:
-            with open(os.path.join(racine, ".claude-plugin", "plugin.json"), encoding="utf-8") as f:
+            with open(os.path.join(racine, ".github", "plugin", "plugin.json"), encoding="utf-8") as f:
                 version = json.load(f).get("version", version)
         except (OSError, ValueError, AttributeError):
             pass
@@ -596,7 +566,7 @@ def ligne_paquet(l):
                                     jours_depuis(l.trace[1]))
     return "%sdéclaré %s · inscrit %s · servi %s" % (
         "%s — " % l.nom if l.nom is not None else "",
-        {"paquet": "oui", "hooks": "hooks locaux"}.get(l.declare, "NON"),
+        {"paquet": "oui"}.get(l.declare, "NON"),
         {True: "oui", False: "NON"}.get(l.inscrit, "?"), servi)
 
 
@@ -618,7 +588,7 @@ def verdict(h):
         return ("neuf", "Aucune mémoire : `harnais adopte` la pose et branche le paquet — à blanc "
                 "d'abord, `--go` pour écrire.")
     if h.forme == "ancienne":
-        return ("ancien", "Taxonomie d'avant le 02/09/2026 dans `.memory/` (%s) : aucun "
+        return ("ancien", "Ancienne taxonomie dans `.memory/` (%s) : aucun "
                 "outil ne la migre — le tri se fait à la main, puis `harnais adopte`." % ", ".join(h.anciens))
     if h.forme == "mind-seul":
         return ("ancien", "Tout dans `.mind/`, sans faits du projet : l'organisation d'avant les "
@@ -637,17 +607,10 @@ def verdict(h):
         return ("non-branche", "%sRien ne déclare le paquet : %s" % (
             qui(non), "`harnais adopte --go` le branche." if brain
             else "`harnais brain-migre`, puis `harnais adopte --go`."))
-    hk = [l for l in h.lancements if l.declare == "hooks"]
-    if hk:
-        return ("hooks-locaux", "%sCâblé par des hooks locaux, d'avant le paquet : ils ne reçoivent "
-                "aucune correction. %s" % (
-                    qui(hk),
-                    "`harnais adopte --go` déclare le paquet ; retirer ensuite les hooks locaux, sinon tout "
-                    "tourne deux fois." if brain else "`harnais brain-migre`, puis `harnais adopte --go`."))
     ni = [l for l in h.lancements if l.declare == "paquet" and l.inscrit is False]
     if ni:
-        return ("non-inscrit", "%sPaquet déclaré mais pas inscrit : depuis Claude Code 2.1.268 il ne se "
-                "charge PAS, sans un mot. Dans le dossier : `claude plugin install harnais@atelier --scope project`." % qui(ni))
+        return ("non-inscrit", "%sPaquet déclaré mais marketplace locale non résolue : vérifier le chemin "
+                "dans .github/copilot/settings.json." % qui(ni))
     nm = [l for l in h.lancements if l.declare == "paquet" and l.inscrit is None]
     if nm:
         return ("non-mesure", "%sLes inscriptions au paquet n'ont pas pu être lues : qu'il se charge au "
@@ -678,7 +641,7 @@ def verdict(h):
     if vieilles:
         v = vieilles[0].inscrite or ""
         return ("inscription-vieille", "%sInscrit en %s alors que le paquet en est à %s : dans le dossier, "
-                "`claude plugin update harnais@atelier --scope project`, puis au prochain démarrage." % (qui(vieilles), v, ici))
+                "corriger la marketplace locale, puis redémarrer Copilot." % (qui(vieilles), v, ici))
 
     def vieux_(l):
         if l.trace is None:
@@ -758,7 +721,7 @@ def symbole(v):
     return {"ok": "OK  ", "v1": "V1  ", "en-retard": "RETD", "neuf": "NEUF", "ancien": "TRI ",
             "ambigu": "AMBI", "incomplet": "MANQ", "sans-agent": "AGT?", "non-branche": "BRCH",
             "non-inscrit": "INSC", "jamais-servi": "SERV",
-            "hooks-locaux": "HOOK", "inscription-vieille": "MAJ ", "non-mesure": "????",
+            "inscription-vieille": "MAJ ", "non-mesure": "????",
             "sans-git": "GIT ", "surplus": "TROP", "sans-deny": "DENY"}.get(v, "?   ")
 
 
@@ -796,7 +759,15 @@ def terminal(projets, racine):
         out.append("     mémoire: %s · %s · .logs %d · git %s" % (forme_mot(h), jauge(h), h.logs, oui(h.git)))
         for l in h.lancements:
             out.append("     paquet : %s" % ligne_paquet(l))
-        out.append("     contexte: CLAUDE.md→mémoire %s · deny %s" % (oui(h.oriente), deny_txt(h)))
+        for l in h.lancements:
+            base = os.path.join(racine, p.nom)
+            d = agent.contexte(base, l.nom) if l.nom is not None else base
+            if copilot.ancien_paquet(d):
+                out.append("     ATTENTION : %s déclare encore harnais@atelier (risque de double chargement)"
+                           % os.path.join(d, ".claude/settings.json"))
+            if d != base and est_fichier(copilot.settings(d)):
+                out.append("     ATTENTION : %s est inerte hors de la racine Git" % copilot.settings(d))
+        out.append("     contexte: AGENTS.md→mémoire %s · deny %s" % (oui(h.oriente), deny_txt(h)))
         if p.taches:
             out.append("     tâches : %d en cours · %d à faire · %d attendent une décision" % (
                 p.encours, p.afaire, len(p.attente)))
@@ -876,7 +847,7 @@ def badge(v):
         "ancien": ("b-bad", "taxonomie ancienne"), "ambigu": ("b-bad", "à cheval"),
         "sans-agent": ("b-bad", "aucun agent"), "incomplet": ("b-warn", "mémoire incomplète"),
         "non-branche": ("b-bad", "paquet non déclaré"), "non-inscrit": ("b-bad", "non inscrit"),
-        "jamais-servi": ("b-bad", "jamais servi"), "hooks-locaux": ("b-warn", "hooks locaux"),
+        "jamais-servi": ("b-bad", "jamais servi"),
         "inscription-vieille": ("b-warn", "inscription à mettre à jour"),
         "non-mesure": ("b-warn", "non mesuré"), "sans-git": ("b-warn", "sans git"),
         "surplus": ("b-warn", "fichier en trop"), "sans-deny": ("b-warn", "aucun deny"),
@@ -927,6 +898,14 @@ def page(projets, racine, watch):
                      e(ch.get("maj") or "—"), e(ch.get("sante") or "—"),
                      non(h.git, "git"), e(forme_mot(h)), e(jauge(h)), h.logs))
         for l in h.lancements:
+            base = os.path.join(racine, p.nom)
+            d = agent.contexte(base, l.nom) if l.nom is not None else base
+            if copilot.ancien_paquet(d):
+                c.append('<div class="conseil">ATTENTION : %s déclare encore harnais@atelier (double chargement '
+                         'possible)</div>' % e(os.path.join(d, ".claude/settings.json")))
+            if d != base and est_fichier(copilot.settings(d)):
+                c.append('<div class="conseil">ATTENTION : %s est inerte hors de la racine Git</div>'
+                         % e(copilot.settings(d)))
             servi = l.trace is not None
             if l.declare != "non" and l.inscrit is not False and servi:
                 corps = e(ligne_paquet(l))
@@ -934,7 +913,7 @@ def page(projets, racine, watch):
                 corps = '<span class="no">%s</span>' % e(ligne_paquet(l))
             c.append('<div class="meta"><span>%s</span></div>' % corps)
         c.append('<div class="meta"><span>%s</span><span><b>deny</b> %s</span></div>' % (
-            non(h.oriente, "CLAUDE.md → mémoire"), deny_txt(h)))
+            non(h.oriente, "AGENTS.md → mémoire"), deny_txt(h)))
         if p.verdict != "ok":
             c.append('<div class="conseil">%s</div>' % e(p.conseil))
         c.append("</div>")
