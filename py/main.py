@@ -59,7 +59,8 @@ TABLE = {
 
 # Les hooks que `HARNAIS_JUGE` fait taire : le juge lancé par `copilot -p`
 # déclencherait sinon les hooks du harnais, en boucle.
-_JUGE_MUET = ("briefing", "attente", "mind-guard", "perimetre", "journal", "lecture")
+_JUGE_MUET = ("briefing", "attente", "mind-guard", "perimetre", "journal", "lecture",
+              "apres-bash")
 
 AIDE = """harnais — le socle agentique
 
@@ -84,6 +85,7 @@ POSER LE HARNAIS SUR UN PROJET — le seul geste à connaître pour démarrer :
 APPELÉES PAR LE HARNAIS (chacune lit sa charge JSON sur l'entrée standard) :
   journal      PostToolUse/Bash — écrit ce qui a été commité
   lecture      PostToolUse/Read|Bash — note les sections de faits lues
+  apres-bash   PostToolUse/Bash — `journal` puis `lecture`, en UN processus
   attente   Stop — ce qui attend @user, et les gardes
   briefing  SessionStart/userPromptTransformed — le briefing d'entrée
   carnet    lecture du carnet d'équipe (JSON, pour comparer)
@@ -134,6 +136,32 @@ def _identite():
     return "%s %s" % (version, h.hexdigest()[:12])
 
 
+def _apres_bash():
+    """`journal` puis `lecture` sur la MÊME charge, en un seul processus.
+
+    Après chaque commande shell, deux hooks partaient : deux démarrages de
+    Python, et sous Windows chacun se paie (antivirus, disque). Les deux
+    gestes restent indépendants : la panne de l'un n'empêche pas l'autre,
+    et chacune se dit sur la sortie d'erreur, comme seule.
+    """
+    try:
+        texte = sys.stdin.read()
+    except (OSError, UnicodeDecodeError):
+        texte = ""
+    import hote
+    code = 0
+    for nom_module, prep in (("journal", hote.prepare_si_commit), ("poids", hote.prepare_sans_agent)):
+        try:
+            __import__(nom_module).main(prep(texte))
+        except SystemExit:
+            raise
+        except Exception as e:      # noqa — l'autre geste part quand même
+            sys.stderr.write("harnais : erreur interne dans « apres-bash » (%s) — %s: %s\n"
+                             % (nom_module, type(e).__name__, e))
+            code = 1
+    return code
+
+
 def main(argv):
     sous = argv[0] if argv else ""
     if sys.version_info < MINIMUM:
@@ -145,6 +173,9 @@ def main(argv):
     if sous in ("", "-h", "--help", "aide"):
         sys.stdout.write(AIDE)
         return 0
+    if sous == "apres-bash":
+        import os
+        return 0 if os.environ.get("HARNAIS_JUGE") else _apres_bash()
     cible = TABLE.get(sous)
     if cible is None:
         # On le DIT, et le code est 1 : sous Copilot un hook mal câblé se voit

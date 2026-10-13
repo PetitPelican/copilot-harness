@@ -1,25 +1,79 @@
 #!/bin/sh
-# LA COMMANDE `harnais` — celle que les fiches et les messages font taper.
+# LE LANCEUR — la porte du harnais pour les hooks `bash` et pour les agents.
 #
-# Les fiches et les messages des hooks citent `harnais menage`, `harnais adopte`,
-# `harnais equipe`… : sans ce lanceur, seuls `harnais-darwin-arm64` et
-# `harnais-windows-x86_64.exe` existeraient, et chaque citation rendrait
-# « commande introuvable ». Un chemin annoncé doit s'ouvrir.
+#     harnais <sous-commande> [arguments]
 #
-# Un lanceur et pas un binaire au nom nu : sous Windows, Git Bash pourrait
-# prendre un fichier sans extension pour le programme. Et la cause d'un échec
-# se dit : un paquet abîmé se répare, une machine non couverte, jamais.
-d=$(dirname "$0")
-m="$(uname -s 2>/dev/null)-$(uname -m 2>/dev/null)"
-case "$m" in
-  Darwin-arm64) b="$d/harnais-darwin-arm64" ;;
-  MINGW*|MSYS*|CYGWIN*) b="$d/harnais-windows-x86_64.exe" ;;
-  *) b="" ;;
-esac
-if [ -n "$b" ] && [ -x "$b" ]; then exec "$b" "$@"; fi
-if [ -z "$b" ]; then
-  echo "harnais : cette machine ($m) n'est pas couverte — le paquet ne livre que macOS Apple Silicon et Windows x86_64. Aucune mise a jour n'y changera rien." >&2
-else
-  echo "harnais : le programme du paquet manque dans $d — remettre le paquet en etat : copilot plugin update harnais@atelier-copilot" >&2
+# Les fiches et les messages des hooks citent `harnais menage`, `harnais
+# adopte`… : un chemin annoncé doit s'ouvrir. Et un seul endroit sait trouver
+# Python par shell : le hook `powershell` porte la même recherche, écrite dans
+# sa langue, et `harnais.cmd` la sienne (voir outils/genere_hooks.py).
+#
+# POURQUOI IL SE PLAINT. Un hook qui ne démarre pas ne bloque rien et ne le dit
+# pas. L'absence de Python s'ÉCRIT donc sur la sortie d'erreur, avec le code que
+# le hook concerné aurait de toute façon : 2 pour `mind-guard` et `perimetre`
+# (un garde absent ne laisse pas passer), 1 pour les autres.
+#
+# CE QU'IL CHERCHE, DANS CET ORDRE :
+#   1. HARNAIS_PYTHON s'il est posé, et lui seul (les essais) ;
+#   2. `python3`, puis `python` — jamais le faux `python.exe` du Microsoft
+#      Store (WindowsApps) : il ouvre le Store au lieu d'exécuter ;
+#   3. les emplacements connus de macOS, puis `/usr/bin/python3` (le relais
+#      d'Xcode, lent à démarrer) ; enfin `py -3`, le lanceur de Windows.
+# La version (3.9 au moins) est vérifiée par le programme lui-même, au premier
+# octet : un second processus pour la tester doublerait le prix de chaque hook.
+#
+# -S : ni site-packages ni .pth — la bibliothèque standard suffit.
+# -E : ignore PYTHONPATH & co — un environnement ne remplace pas un module.
+# pycache_prefix : le code compilé va dans le dossier d'état du paquet, jamais
+#      dans le paquet lui-même, qui reste tel que livré.
+racine=$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)
+sous="$1"
+code=1
+case "$sous" in mind-guard|perimetre) code=2 ;; esac
+
+if [ ! -f "$racine/py/main.py" ]; then
+  echo "harnais : le programme du paquet manque dans $racine/py — remettre le paquet en etat : copilot plugin update harnais@atelier-copilot" >&2
+  exit $code
 fi
-exit 127
+
+python_ok() {   # python_ok <chemin> : existe, et n'est pas le relais du Store
+  case "$1" in *WindowsApps*|"") return 1 ;; esac
+  [ -x "$1" ] || return 1
+  return 0
+}
+
+choisi=""
+relais=""
+if [ -n "$HARNAIS_PYTHON" ]; then
+  if python_ok "$HARNAIS_PYTHON"; then choisi="$HARNAIS_PYTHON"; else
+    echo "harnais : HARNAIS_PYTHON=$HARNAIS_PYTHON n'est pas un programme utilisable — aucun Python 3.9 ou plus : les gardes du paquet ne partent pas." >&2
+    exit $code
+  fi
+fi
+[ -z "$choisi" ] && for c in python3 python; do
+  p=$(command -v "$c" 2>/dev/null) || continue
+  python_ok "$p" || continue
+  if [ "$p" = "/usr/bin/python3" ]; then relais="$p"; continue; fi
+  choisi="$p"; break
+done
+if [ -z "$choisi" ] && [ -z "$HARNAIS_PYTHON" ]; then
+  for p in /opt/homebrew/bin/python3 /usr/local/bin/python3 \
+           /Library/Frameworks/Python.framework/Versions/Current/bin/python3; do
+    if python_ok "$p"; then choisi="$p"; break; fi
+  done
+fi
+[ -z "$choisi" ] && [ -n "$relais" ] && choisi="$relais"
+
+maison="${COPILOT_HOME:-${HOME:-$USERPROFILE}/.copilot}"
+donnees="${COPILOT_PLUGIN_DATA:-${PLUGIN_DATA:-$maison/plugin-data/atelier-copilot/harnais}}/pycache"
+COPILOT_PLUGIN_ROOT="${COPILOT_PLUGIN_ROOT:-$racine}"
+export COPILOT_PLUGIN_ROOT
+if [ -n "$choisi" ]; then
+  exec "$choisi" -S -E -X "pycache_prefix=$donnees" "$racine/py/main.py" "$@"
+fi
+if [ -z "$HARNAIS_PYTHON" ] && command -v py >/dev/null 2>&1; then
+  exec py -3 -S -E -X "pycache_prefix=$donnees" "$racine/py/main.py" "$@"
+fi
+
+echo "harnais : aucun Python 3.9 ou plus n'est installe sur cette machine — les gardes du paquet ne partent pas, rien ne les remplace. Installer Python (Windows : winget install Python.Python.3.13, ou python.org en cochant « Add to PATH » · macOS : brew install python), puis relancer l'agent. Le faux python du Microsoft Store ne compte pas." >&2
+exit $code
