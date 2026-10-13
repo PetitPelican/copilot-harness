@@ -64,7 +64,7 @@ try {
     # Le paquet, recopie sous un chemin qu'un cmd.exe lirait mal.
     $paquet = Join-Path $root 'Jean (Pro) x\paquet'
     New-Item -ItemType Directory -Path $paquet | Out-Null
-    foreach ($d in @('py', 'bin', 'hooks', '.github')) {
+    foreach ($d in @('py', 'bin', 'hooks', '.github', 'skills')) {
         Copy-Item -LiteralPath (Join-Path $PackageRoot $d) -Destination $paquet -Recurse
     }
     $home2 = Join-Path $root 'maison'
