@@ -195,8 +195,9 @@ Puis **commiter** : une nouvelle conversation de l'app part de l'état commité,
 un profil non commité n'apparaît pas dans le menu.
 
 Le programme est celui du paquet, le même sur Mac et sur Windows — le
-briefing d'un projet en donne le chemin exact. C'est un programme natif : il ne
-dépend d'aucun interpréteur installé sur la machine.
+briefing d'un projet en donne le chemin exact. Il est écrit en Python (3.9 ou
+plus, bibliothèque standard seulement) : sans Python sur le poste, les gardes
+refusent et le lanceur le dit.
 
 ## Ce qui reste à la main
 

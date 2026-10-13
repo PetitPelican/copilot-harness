@@ -518,6 +518,7 @@ Les identifiants de modèles vieillissent ; la règle, elle, ne change pas :
   regarder**, pas **quoi**.
 - **Tenir `brain/mind/` à jour fait partie du travail**, pas de la paperasse d'après.
   Avant de rendre la main, `state.md` et `todo.md` disent l'état réel.
-- **Portabilité** : le paquet est un programme natif, livré pour macOS Apple
-  Silicon et Windows x86_64. Aucun script propre à un seul système — un outil
-  qu'une des machines ne peut pas lancer ne signale jamais qu'il est mort.
+- **Portabilité** : le paquet est un seul programme Python (3.9+, bibliothèque
+  standard), le même sur Windows et macOS. Aucun script propre à un seul
+  système — un outil qu'une des machines ne peut pas lancer ne signale jamais
+  qu'il est mort.

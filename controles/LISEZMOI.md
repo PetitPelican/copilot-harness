@@ -61,8 +61,8 @@ le dit — il ne passe pas.
 
 - Windows PowerShell 5.1 : sa politique d'exécution peut bloquer les scripts,
   et elle n'est pas contournée.
-- macOS : la chaîne GitHub construit et teste le binaire sur un runner
-  `macos-14` ; aucun essai sur un vrai Mac n'est fait ici.
+- macOS : la chaîne GitHub rejoue les tests sur un runner `macos-14`
+  (Python 3.9 et 3.12) ; aucune session Copilot réelle sur Mac n'est faite ici.
 
 La suite différentielle historique (témoins figés et scripts Python/shell
 macOS) a été retirée en 0.14.4 : elle ne tournait plus que contre l'ancien

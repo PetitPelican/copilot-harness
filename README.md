@@ -25,9 +25,10 @@ dossier de destination du plugin séparé de la source et de l'atelier.
 Montre-moi les trois chemins. Ne réutilise pas un dossier non vide sans vérifier
 son origine et obtenir mon accord ; ne supprime ni n'écrase mes fichiers.
 
-Lis le README et install.ps1 du clone. Vérifie Git, PowerShell et Copilot CLI ;
-si nécessaire fournis -CopilotPath vers un exécutable vérifié. Ne compile pas
-et n'installe pas de dépendances si le binaire Windows livré fonctionne.
+Lis le README et install.ps1 du clone. Vérifie Git, PowerShell, Python 3.9 ou
+plus (`py -3 --version`) et Copilot CLI ; si nécessaire fournis -CopilotPath vers
+un exécutable vérifié. Si Python manque, dis-le-moi et propose
+`winget install Python.Python.3.13` : ne l'installe pas sans mon accord.
 Ne désactive ni ne contourne la politique d'exécution PowerShell de mon poste :
 si elle bloque le script, explique le blocage et arrête-toi.
 
@@ -71,11 +72,14 @@ d'ouvrir une nouvelle conversation. Voir la [fiche QA](skills/agentic-agents/ref
 - Copilot CLI installé et accès Copilot actif pour les sessions.
   L'installateur cherche `copilot` dans le PATH puis le CLI du SDK de l'app ;
   `-CopilotPath` permet de fournir son exécutable explicitement.
-- Aucun Rust, Python ou compilateur requis pour utiliser le paquet Windows.
-  Ils sont nécessaires uniquement pour reconstruire le programme.
-- Le binaire précompilé du dépôt est Windows x86_64. Pour macOS Apple Silicon,
-  construire une archive native avec la procédure de livraison ; un ancien
-  binaire Mac n'est pas conservé comme s'il correspondait à cette version.
+- **Python 3.9 ou plus** (depuis la 2.0.0) : le programme du paquet est écrit
+  en Python, bibliothèque standard seulement, rien à installer avec `pip`.
+  `winget install Python.Python.3.13`, ou python.org en cochant « Add to PATH ».
+  Le faux `python.exe` du Microsoft Store ne compte pas. Sans Python,
+  l'installateur s'arrête, et les deux gardes (commit, périmètre) refusent
+  plutôt que de laisser passer.
+- Le même paquet sert Windows et macOS : il n'y a plus de binaire par
+  plateforme. La version 1.3.0 (programme Rust) reste étiquetée `v1.3.0`.
 
 L'app Copilot, le CLI et les extensions Copilot des IDE ne sont pas
 interchangeables : ce guide vise le CLI et les sessions de l'app qui

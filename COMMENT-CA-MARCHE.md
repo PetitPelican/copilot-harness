@@ -57,7 +57,11 @@ Trois boucles imbriquées :
 
 ## 3. Ce qu'on installe
 
-Le paquet, pour GitHub Copilot CLI seulement, fournit `hooks/copilot.json`, `skills/` et le binaire `bin/harnais`.
+Le paquet, pour GitHub Copilot CLI seulement, fournit `hooks/copilot.json`, `skills/`,
+le programme `py/` (Python 3.9+, bibliothèque standard) et ses lanceurs `bin/harnais`
+(sh) et `bin/harnais.cmd` (Windows). Les hooks PowerShell cherchent Python eux-mêmes
+(`py -3`, puis `python`, jamais le relais du Microsoft Store) ; `hooks/copilot.json`
+est écrit par `outils/genere_hooks.py`, jamais à la main.
 
 ```powershell
 copilot plugin marketplace add "C:\Outils\copilot-harness"
