@@ -75,11 +75,11 @@ try {
     New-Item -ItemType Directory -Path $projet | Out-Null
     Push-Location $projet
     try {
-        Git @('init', '-q', '-b', 'main')
+        Invoke-Git @('init', '-q', '-b', 'main')
         & (Join-Path $paquet 'bin\harnais.cmd') adopte --go | Out-Null
         Assert ($LASTEXITCODE -eq 0) 'adopte par harnais.cmd a echoue'
         [IO.File]::WriteAllText((Join-Path $projet 'brain\fact\base.md'), "---`ncap: CAFE-$([char]0xE9)T$([char]0xE9)`n---`n")
-        Git @('add', '-A'); Git @('commit', '-qm', 'memoire')
+        Invoke-Git @('add', '-A'); Invoke-Git @('commit', '-qm', 'memoire')
 
         foreach ($sh in $shells) {
             try {
@@ -93,14 +93,14 @@ try {
                 Assert ($ctx -match "CAFE-$([char]0xE9)T$([char]0xE9)") "[$sh] briefing sans cap accentue"
                 # 2. garde de commit, et son temoin
                 [IO.File]::WriteAllText((Join-Path $projet "code-$sh.py"), 'x = 1')
-                Git @('add', "code-$sh.py")
+                Invoke-Git @('add', "code-$sh.py")
                 $commit = @{ cwd = $projet; toolName = 'powershell'; toolArgs = @{ command = 'git commit -m code' } }
                 $r = Invoke-Hook $sh (Hook-Command 'PreToolUse' 'Bash') $commit $env1
                 Assert ($r.code -eq 0 -and ($r.out | ConvertFrom-Json).permissionDecision -eq 'deny') "[$sh] commit sans etat autorise : $($r.out) $($r.err)"
                 $commit.toolArgs.command = 'git commit -m code # mind-ok'
                 $r = Invoke-Hook $sh (Hook-Command 'PreToolUse' 'Bash') $commit $env1
                 Assert ($r.code -eq 0 -and $r.out -eq '') "[$sh] mind-ok refuse : $($r.out)"
-                Git @('commit', '-qm', "code $sh")
+                Invoke-Git @('commit', '-qm', "code $sh")
                 # 3. apres le commit : journal (et lecture) en un processus
                 $r = Invoke-Hook $sh (Hook-Command 'PostToolUse' 'Bash') $commit $env1
                 Assert ($r.code -eq 0) "[$sh] apres-bash code $($r.code) : $($r.err)"
