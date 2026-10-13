@@ -28,7 +28,7 @@ function Assert([bool]$Condition, [string]$Message) {
 function Hook-Command([string]$Event, [string]$Matcher) {
     foreach ($h in @($hooks.$Event)) {
         $m = if ($h.PSObject.Properties['matcher']) { $h.matcher } else { $null }
-        if ($m -eq $Matcher) { return $h.powershell }
+        if ("$m" -eq "$Matcher") { return $h.powershell }
     }
     throw "hook absent : $Event / $Matcher"
 }
