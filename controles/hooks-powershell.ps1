@@ -55,7 +55,7 @@ function Invoke-Hook([string]$Shell, [string]$Command, [object]$Payload, [hashta
     $p.WaitForExit()
     return @{ code = $p.ExitCode; out = $out.Trim(); err = $err.Result }
 }
-function Git([string[]]$Arguments) {
+function Invoke-Git([string[]]$Arguments) {
     & git -c user.name=Test -c user.email=test@example.invalid -c commit.gpgsign=false @Arguments
     if ($LASTEXITCODE -ne 0) { throw "git a echoue : $Arguments" }
 }
