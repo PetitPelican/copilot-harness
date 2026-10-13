@@ -158,7 +158,7 @@ def main():
         env = env_jetable(poste, scratch)
         env["COPILOT_PLUGIN_ROOT"] = str(copie)
         if not args.sans_tests:
-            subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-t", "."],
+            subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tests"],
                            cwd=copie, env=env, check=True)
         identite = run(sys.executable, str(copie / "py" / "main.py"), "version", cwd=copie, env=env)
         attendue = f"{version} {empreinte_py(files)}"
@@ -180,7 +180,7 @@ def main():
         "version": version, "source_py_sha1": empreinte_py(files), "git_head": git_head,
         "python": sys.version.split()[0], "source_date_epoch": epoch, "identity": identite,
         "tests": "non executes (--sans-tests)" if args.sans_tests
-                 else "python -m unittest discover -s tests -t . (HOME jetable, instantane livre)",
+                 else "python -m unittest discover -s tests (HOME jetable, instantane livre)",
         "files_sha256": {n: sha(b) for n, b in sorted(files.items())},
     }
     files["release-manifest.json"] = (json.dumps(evidence, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode()

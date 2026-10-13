@@ -7,7 +7,7 @@ configuration Copilot réelle du poste.
 ## Sans Copilot
 
 ```powershell
-python -m unittest discover -s tests -t .
+python -m unittest discover -s tests
 python .\scripts\package_release.py
 .\controles\hooks-powershell.ps1
 .\controles\install-windows.ps1
