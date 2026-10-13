@@ -121,6 +121,13 @@ def _cle(p):
     c = re.sub("/+", "/", p)
     if len(c) > 1:
         c = c.rstrip("/")
+    if os.name == "nt":
+        # Sous Windows, git rend `C:/x`, le système `C:\x`, et la casse ne
+        # distingue rien : un même dossier aurait deux clés, et un agent
+        # inscrit passerait pour « non inscrit » (mesuré par la CI Windows).
+        if c.startswith("\\\\?\\"):
+            c = c[4:]
+        c = os.path.normcase(os.path.normpath(c))
     return c
 
 
@@ -383,7 +390,7 @@ def lancement(p, l, nom_, cps, ins):
         j = [_cle(canon(x)) for x in jumeaux]
         inscrit, inscrite = False, None
         for (c, v) in ins.entrees:
-            if _cle(c) in j:
+            if _cle(canon(c)) in j:
                 inscrit, inscrite = True, v
                 break
     if declare == "paquet" and inscrit is not True:

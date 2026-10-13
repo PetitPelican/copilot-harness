@@ -155,7 +155,7 @@ class Tests(unittest.TestCase):
         lecture = agent.Lecture(choix=agent.Choix("agent", "ops", 1))
         s = agent.resous(p, lecture)
         self.assertEqual(s.actif, "OPS")
-        self.assertEqual(s.place, os.path.join(p, "brain/mind/OPS"))
+        self.assertEqual(s.place, os.path.join(p, "brain", "mind", "OPS"))
         r = memoire.resous(s.place)
         self.assertEqual(r.nom_agent, "OPS")
         self.assertEqual(r.prefixe_mind, "brain/mind/OPS/")
@@ -216,7 +216,7 @@ class Tests(unittest.TestCase):
         memoire._VUS.clear()
         lecture = agent.Lecture(choix=agent.Choix("agent", "ops", 1))
         s = agent.resous(w, lecture)
-        self.assertEqual(s.place, os.path.join(w, "brain/mind/OPS"))
+        self.assertEqual(s.place, os.path.join(w, "brain", "mind", "OPS"))
         self.assertEqual(memoire.resous(s.place).mind, s.place)
         for racine in (p, w):
             self.assertIsNotNone(copilot.decision(
