@@ -48,7 +48,7 @@ class Essais(Isole):
         ecris(j(w, "brain/fact/base.md"), "copie")
         r = resous(w)
         self.assertEqual(r.racine, os.path.realpath(w))
-        self.assertEqual(r.fact, j(os.path.realpath(w), "brain/fact"))
+        self.assertEqual(r.fact, j(os.path.realpath(w), "brain", "fact"))
         with open(j(r.fact, "base.md"), encoding="utf-8") as f:
             self.assertEqual(f.read(), "copie")
         shutil.rmtree(j(w, "brain"))
@@ -175,7 +175,8 @@ class Essais(Isole):
         self.assertEqual(r.lot, "agents/QA")
         # Les faits sont au PROJET, l'état est à l'AGENT — c'est toute la règle.
         self.assertEqual(r.fact, j(d, ".fact"))
-        self.assertEqual(r.mind, j(d, "agents/QA/.mind"))
+        # Le lot reste en `/` (préfixe git), comme le Rust : comparer la forme normale.
+        self.assertEqual(os.path.normpath(r.mind), j(d, "agents", "QA", ".mind"))
         self.assertEqual(r.prefixe_fact, ".fact/")
 
     def test_resous_deportee_vise_le_depot_de_memoire(self):
@@ -245,7 +246,7 @@ class Essais(Isole):
         b = self.depot("r-ws-brain")
         mk(b, BRAIN, "fact")
         vu = resous(b).workspace_prevu()
-        self.assertTrue(vu.endswith("brain/workspace"), "cerveau : rendu %r" % vu)
+        self.assertTrue(vu.endswith(os.path.join("brain", "workspace")), "cerveau : rendu %r" % vu)
         self.assertFalse(vu.endswith("equipe"), "cerveau : rend l'emplacement d'en-place")
 
         # AMBIGUË : deux arbres, aucun choix. Créer ici, c'est créer un carnet

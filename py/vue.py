@@ -359,8 +359,22 @@ def _relatif(p, l):
     pc, lc = _cle(p), _cle(l)
     if lc == pc:
         return ""
-    pre = pc if pc.endswith("/") else pc + "/"
-    return lc[len(pre):] if lc.startswith(pre) else ""
+    sep = "\\" if os.name == "nt" else "/"
+    pre = pc if pc.endswith(sep) else pc + sep
+    if not lc.startswith(pre):
+        return ""
+    # La fin du chemin D'ORIGINE, pas de la clé : sous Windows la clé est en
+    # minuscules, et un dossier doit garder le nom qu'on lui a donné.
+    brut = l
+    if os.name == "nt":
+        if brut.startswith("\\\\?\\"):
+            brut = brut[4:]
+        brut = os.path.normpath(brut)
+    else:
+        brut = re.sub("/+", "/", brut)
+        if len(brut) > 1:
+            brut = brut.rstrip("/")
+    return brut[len(brut) - (len(lc) - len(pre)):]
 
 
 def _obj(v, k):

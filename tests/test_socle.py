@@ -29,7 +29,7 @@ class Essais(Isole):
 
     def test_les_hooks_et_les_commandes_resolvent_le_meme_etat_copilot_sans_le_creer(self):
         base = os.path.join(tempfile.gettempdir(), "etat-copilot-%d" % os.getpid())
-        attendu = os.path.join(base, "plugin-data/atelier-copilot/harnais")
+        attendu = os.path.join(base, "plugin-data", "atelier-copilot", "harnais")
         self.assertEqual(chemin_etat(None, base), attendu)
         self.assertFalse(os.path.exists(attendu), "la simple résolution ne crée rien")
         donnees = os.path.join(base, "donnees-plugin")
