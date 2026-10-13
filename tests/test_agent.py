@@ -110,7 +110,7 @@ class Essais(unittest.TestCase):
     def test_le_chemin_du_journal_ne_se_compose_qu_avec_un_identifiant_sain(self):
         m = "/maison/.copilot"
         self.assertEqual(chemin_journal({"session_id": "7d09-18_41"}, m),
-                         os.path.join(m, "session-state/7d09-18_41/events.jsonl"))
+                         os.path.join(m, "session-state", "7d09-18_41", "events.jsonl"))
         self.assertEqual(chemin_journal({"session_id": "x", "transcript_path": "/t/events.jsonl"}, m),
                          "/t/events.jsonl", "la fin de tour donne le chemin")
         self.assertIsNone(chemin_journal({"session_id": "../../etc"}, m))
@@ -135,7 +135,7 @@ class Essais(unittest.TestCase):
         s = resous(d, lecture(Choix("agent", "ops", 2)))
         self.assertEqual(s.actif, "OPS")
         self.assertEqual(s.source, Source("menu", 2))
-        self.assertEqual(s.place, os.path.join(d, "agents/OPS"))
+        self.assertEqual(s.place, os.path.join(d, "agents", "OPS"))
 
         # 2. Rien de choisi, session lancée dans un dossier d'agent : lui, sur place.
         s = resous(os.path.join(d, "agents/PO"), lecture(Choix("rien")))
@@ -144,7 +144,7 @@ class Essais(unittest.TestCase):
         # 3. « Default agent » ou rien, à la racine : QA, et c'est dit.
         s = resous(d, lecture(Choix("retire", None, 80)))
         self.assertEqual((s.actif, s.source), ("QA", Source("defaut", 80)))
-        self.assertEqual(s.place, os.path.join(d, "agents/QA"))
+        self.assertEqual(s.place, os.path.join(d, "agents", "QA"))
         s = resous(d, Lecture())
         self.assertEqual((s.actif, s.source), ("QA", Source("defaut", None)))
 
@@ -155,7 +155,7 @@ class Essais(unittest.TestCase):
 
         # Le menu l'emporte sur le dossier.
         s = resous(os.path.join(d, "agents/PO"), lecture(Choix("agent", "ops", 3)))
-        self.assertEqual(s.place, os.path.join(d, "agents/OPS"))
+        self.assertEqual(s.place, os.path.join(d, "agents", "OPS"))
 
     def test_sans_qa_ni_choix_aucun_agent_et_mono_reste_mono(self):
         d = self.projet("sans-qa", ["OPS", "PO"])
@@ -178,7 +178,7 @@ class Essais(unittest.TestCase):
         git(d, "worktree", "add", "-q", "-b", "session", w)
         w = os.path.realpath(w)
         s = resous(w, Lecture(choix=Choix("agent", "ops", 2)))
-        self.assertEqual(s.place, os.path.join(w, "agents/OPS"), "jamais le dossier principal")
+        self.assertEqual(s.place, os.path.join(w, "agents", "OPS"), "jamais le dossier principal")
         tete, fin = lignes_briefing(s)
         self.assertTrue("OPS" in tete[0] and "ligne 2" in tete[0], repr(tete))
         self.assertTrue(any(l == "RÔLE-OPS" for l in fin), "le rôle est MONTRÉ : %r" % (fin,))

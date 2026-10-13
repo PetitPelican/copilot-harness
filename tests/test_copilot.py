@@ -108,7 +108,7 @@ class Essais(unittest.TestCase):
         self.assertIsNone(ecrit("agents/OPS/e.md"))
         # Ce que le briefing affiche : la copie, jamais le principal.
         self.assertEqual(copilot.perimetre(moi),
-                         [os.path.join(w, "agents/PO"), os.path.join(w, "agents/QA")])
+                         [os.path.join(w, "agents", "PO"), os.path.join(w, "agents", "QA")])
         git(d, "worktree", "remove", "--force", w)
 
     def test_sdk_choisit_la_version_numerique_disponible(self):
@@ -117,7 +117,7 @@ class Essais(unittest.TestCase):
             os.makedirs(os.path.join(d, v))
             if v != "2.0.0-0":
                 ecris(os.path.join(d, v, "copilot.exe"), "")
-        self.assertEqual(copilot.executable_sdk(d), os.path.join(d, "1.10.0-0/copilot.exe"))
+        self.assertEqual(copilot.executable_sdk(d), os.path.join(d, "1.10.0-0", "copilot.exe"))
 
 
 if __name__ == "__main__":
