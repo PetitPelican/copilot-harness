@@ -46,7 +46,7 @@ try {
     [IO.Directory]::CreateDirectory($sandbox) | Out-Null
     $source = Join-Path $sandbox 'source'
     [IO.Directory]::CreateDirectory($source) | Out-Null
-    foreach ($name in @('.github\plugin', 'bin', 'hooks', 'skills',
+    foreach ($name in @('.github\plugin', 'bin', 'py', 'hooks', 'skills',
         'criteres-passe.md', 'criteres-relecture.md', 'rechutes.md')) {
         $from = Join-Path $root $name
         $to = Join-Path $source $name
@@ -183,7 +183,7 @@ try {
     Write-Text $settingsPath ($settings | ConvertTo-Json -Depth 20)
     $env:COPILOT_CUSTOM_INSTRUCTIONS_DIRS += ',C:\added-later'
     & $installer -Action Uninstall -Destination $destination -Go @cliParams
-    Assert (!(Test-Path -LiteralPath (Join-Path $destination 'bin\harnais-windows-x86_64.exe'))) 'Uninstall removes unchanged owned binary'
+    Assert (!(Test-Path -LiteralPath (Join-Path $destination 'bin\harnais.cmd'))) 'Uninstall removes unchanged owned binary'
     Assert ((Get-Content -LiteralPath (Join-Path $destination 'criteres-relecture.md') -Raw) -eq 'LOCAL EDIT') 'Uninstall keeps edited owned files'
     Assert ((Get-Content -LiteralPath (Join-Path $destination 'unowned.txt') -Raw) -eq 'USER FILE') 'Uninstall keeps unowned files'
     Assert ((Test-Path -LiteralPath (Join-Path $workshop 'cto\brain\fact\base.md'))) 'Uninstall retains workshop and memory'
@@ -238,7 +238,7 @@ try {
     Fails { & $installer @failureParams -Go } 'Command failed \(37\).*plugin marketplace add'
     Assert (!(Test-Path -LiteralPath $failureParams.WorkshopRoot)) 'Registration failure prevents workshop and environment changes'
     & $installer -Action Uninstall -Destination $failureParams.Destination -CopilotPath $resolvedCli -Go
-    Assert (!(Test-Path -LiteralPath (Join-Path $failureParams.Destination 'bin\harnais-windows-x86_64.exe'))) 'Partial failed installation safely removable'
+    Assert (!(Test-Path -LiteralPath (Join-Path $failureParams.Destination 'bin\harnais.cmd'))) 'Partial failed installation safely removable'
     $globalConflict = $params.Clone()
     $globalConflict.Destination = Join-Path $sandbox 'unowned registration destination'
     $globalConflict.WorkshopRoot = Join-Path $sandbox 'unowned registration workshop'

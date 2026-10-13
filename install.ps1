@@ -1,9 +1,9 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-Installs the local, prebuilt Windows harnais distribution. Dry-run by default.
+Installs the local harnais distribution (Python 3.9+ required). Dry-run by default.
 .DESCRIPTION
-No download, Rust build or personal paths. -Go authorizes
+No download, build or personal paths. -Go authorizes
 writes; -WhatIf still prevents them. Existing instructions and unrelated
 settings are preserved. Updates replace only unchanged installer-owned files.
 Uninstall removes owned registration/settings/environment entries and unchanged
@@ -156,6 +156,30 @@ function Find-Copilot {
     $best = $candidates | Sort-Object Version, Stable, Modified -Descending | Select-Object -First 1
     if ($best) { return $best.Path }
     throw 'Copilot CLI not found. Put copilot on PATH or supply -CopilotPath. No download is attempted.'
+}
+
+function Assert-Python {
+    # Les hooks et la commande `harnais` sont du Python : sans lui rien ne part, et
+    # un hook qui ne part pas ne le dit pas. On le dit ICI, avant d'installer.
+    # Le faux python.exe du Microsoft Store (WindowsApps) ne compte pas : il ouvre
+    # le Store au lieu d'executer.
+    $candidates = @()
+    if ($env:HARNAIS_PYTHON) { $candidates += ,@($env:HARNAIS_PYTHON) }
+    else {
+        $py = Get-Command py -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($py) { $candidates += ,@($py.Source, '-3') }
+        foreach ($c in @(Get-Command python, python3 -CommandType Application -ErrorAction SilentlyContinue)) {
+            if ($c.Source -notlike '*\WindowsApps\*') { $candidates += ,@($c.Source) }
+        }
+    }
+    foreach ($c in $candidates) {
+        $exe = $c[0]; $pre = @($c | Select-Object -Skip 1)
+        try {
+            $out = & $exe @pre -c "import sys;print('%d.%d' % sys.version_info[:2]);sys.exit(0 if sys.version_info>=(3,9) else 3)" 2>$null
+            if ($LASTEXITCODE -eq 0) { Write-Host "Python: $exe ($out)"; return }
+        } catch { }
+    }
+    throw 'Python 3.9 or later is required and was not found (the Microsoft Store stub does not count). Install it with: winget install Python.Python.3.13 (or python.org, ticking "Add to PATH"), then run this installer again.'
 }
 
 function Invoke-Checked([string]$Executable, [string[]]$Arguments, [switch]$Json) {
@@ -479,10 +503,10 @@ if ($Action -ne 'Uninstall') {
         $pluginManifest.hooks -ne 'hooks/copilot.json') {
         throw 'Unsupported distribution: expected atelier-copilot/harnais at local source "./" with hooks/copilot.json.'
     }
-    foreach ($required in @('bin\harnais-windows-x86_64.exe', 'hooks\copilot.json', 'skills')) {
+    foreach ($required in @('bin\harnais.cmd', 'bin\harnais', 'py\main.py', 'hooks\copilot.json', 'skills')) {
         if (!(Test-Path -LiteralPath (Join-Path $SourcePath $required))) { throw "Distribution missing $required" }
     }
-    foreach ($relative in @('.github\plugin', 'bin', 'hooks', 'skills',
+    foreach ($relative in @('.github\plugin', 'bin', 'py', 'hooks', 'skills',
         'criteres-passe.md', 'criteres-relecture.md', 'rechutes.md')) {
         $path = Join-Path $SourcePath $relative
         if (!(Test-Path -LiteralPath $path)) { continue }
@@ -539,7 +563,8 @@ if ($Action -ne 'Uninstall') {
     if (!$existingState -and (!$cliSettingsPlan.pluginAdded -or !$cliSettingsPlan.marketplaceAdded)) {
         throw 'Existing global harnais configuration is unowned; refusing to replace it.'
     }
-    $binary = Join-Path $SourcePath 'bin\harnais-windows-x86_64.exe'
+    Assert-Python
+    $binary = Join-Path $SourcePath 'bin\harnais.cmd'
     Invoke-Checked $binary @('version')
     $memoryPlan = Memory-Plan (Join-Path $CopilotHome 'settings.json')
 }
@@ -656,7 +681,7 @@ try {
         }
         $atelierArgs = @('atelier-monte', '--racine', $WorkshopRoot, '--cto', $CtoName,
             '--utilisateur', $UserName, '--go')
-        Invoke-Checked (Join-Path $Destination 'bin\harnais-windows-x86_64.exe') $atelierArgs
+        Invoke-Checked (Join-Path $Destination 'bin\harnais.cmd') $atelierArgs
         $cto = Join-Path $WorkshopRoot $CtoName
         $gitRoot = (& git -C $cto rev-parse --show-toplevel 2>&1) -join ''
         if ($LASTEXITCODE -ne 0 -or (Full-Path $gitRoot) -ne $cto) { throw "CTO must have its own Git root: $cto" }

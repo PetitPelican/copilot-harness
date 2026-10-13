@@ -62,7 +62,7 @@ try {
 
         # Observe only the two briefing hooks. Synthetic prompts have no tools;
         # Stop checks and the full conversational onboarding are not measured here.
-        $env:HARNAIS_CTO_BINARY = Join-Path $destination 'bin\harnais-windows-x86_64.exe'
+        $env:HARNAIS_CTO_BINARY = Join-Path $destination 'bin\harnais.cmd'
         $probe = @'
 $inputText=[Console]::In.ReadToEnd()
 $output=($inputText | & $env:HARNAIS_CTO_BINARY briefing) -join "`n"

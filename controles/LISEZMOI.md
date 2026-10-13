@@ -7,27 +7,34 @@ configuration Copilot réelle du poste.
 ## Sans Copilot
 
 ```powershell
-python -m unittest discover -s scripts -p test_package_release.py
-python .\scripts\package_release.py --target x86_64-pc-windows-gnu
+python -m unittest discover -s tests -t .
+python .\scripts\package_release.py
+.\controles\hooks-powershell.ps1
 .\controles\install-windows.ps1
 .\controles\portable-smoke.ps1
 ```
 
-- **Les tests Rust** passent par `package_release.py`, qui les lance avec un
-  `HOME`, un `USERPROFILE` et un `COPILOT_HOME` jetables, et sans aucune
-  variable de plugin héritée : un `cargo test` lancé tel quel lit le profil du
-  poste et peut échouer pour une raison qui n'est pas dans le code.
+- **Les tests** (`tests/`) et ceux du conditionnement passent par
+  `package_release.py`, qui les lance sur l'instantané livré avec un `HOME`, un
+  `USERPROFILE` et un `COPILOT_HOME` jetables, et sans aucune variable de plugin
+  héritée : un test lancé tel quel lit le profil du poste et peut échouer pour
+  une raison qui n'est pas dans le code.
+- **`hooks-powershell.ps1`** lance le champ `powershell` de chaque hook de
+  `hooks/copilot.json`, mot pour mot, dans `powershell.exe` 5.1 puis `pwsh`, sous
+  un chemin à espaces et parenthèses : garde de commit (avec son témoin), journal,
+  périmètre, fin de tour, et l'absence de Python (les deux gardes refusent, les
+  autres le disent).
 - **`install-windows.ps1`** joue l'installateur de bout en bout avec le vrai CLI
   (configuration isolée) : prévisualisation sans écriture, installation,
   répétition, mise à jour, désinstallation, conflits refusés, installation
   depuis un dossier `CTO` existant, vide et courant, et Copilot Memory coupé
   puis rendu.
-- **`portable-smoke.ps1`** joue les charges de hooks contre le binaire : atelier,
+- **`portable-smoke.ps1`** joue les charges de hooks contre le lanceur `bin/harnais.cmd` : atelier,
   accueil du CTO puis sa fermeture après déclaration, adoption partielle,
   idempotence, briefing, worktree, tableau de bord, gardes et journal, puis le
   choix d'agent de l'app : profils posés par `equipe`, agent lu dans un
   journal de session, garde de la copie, « Default agent » qui prend QA.
-  `-Executable` désigne un autre binaire que celui de `bin/`.
+  `-Executable` désigne un autre lanceur que celui de `bin/`.
 
 ## Avec un CLI Copilot authentifié
 
