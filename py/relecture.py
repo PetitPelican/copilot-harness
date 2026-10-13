@@ -35,9 +35,7 @@ PLAFOND_JOUR = 12
 # oublié par un processus tué ne doit pas bloquer le dispositif pour toujours.
 VERROU_PERIME_S = 900
 
-# Le modèle du juge. Le socle de la machine impose sonnet par défaut pour tout
-# ce qui n'est pas l'agent lui-même ; un autre modèle demande une consigne.
-MODELE = "claude-sonnet-5"
+# Le modèle du juge : celui du CLI Copilot par défaut, ou `HARNAIS_MODELE_JUGE`.
 
 # `str::trim` du Rust : les caractères White_Space d'Unicode. `str.strip()`
 # retirerait aussi \x1c à \x1f, que le Rust laisse.
@@ -125,11 +123,15 @@ def normalise(sortie):
     # On retire les accents des trois mots attendus plutôt que d'espérer que le
     # modèle les pose : « CONFIRMÉ » et « CONFIRME » doivent valoir pareil.
     sans = haut.replace("É", "E").replace("È", "E")
-    if sans.startswith("CONFIRME"):
+    # STRICT (repris du harnais Copilot) : UNE ligne, et le mot exact. « CONFIRME
+    # pas vraiment », « CONFIRMERA » ou un CONFIRME suivi d'une autre ligne ne
+    # confirment rien — l'ancien `startswith` les comptait comme des accords.
+    une = len(_lignes(brut)) == 1
+    if une and sans == "CONFIRME":
         return "CONFIRME"
-    elif sans.startswith("CONTREDIT"):
+    elif une and sans.startswith("CONTREDIT "):
         return "CONTREDIT " + _apres_octets(premiere, 9)
-    elif sans.startswith("INSUFFISANT"):
+    elif une and sans.startswith("INSUFFISANT "):
         return "INSUFFISANT " + _apres_octets(premiere, 11)
     else:
         # LE POINT LE PLUS IMPORTANT DU PROGRAMME. Un juge muet, coupé,
@@ -160,21 +162,26 @@ def _erreur_io(e):
 
 
 def juge(invite_):
-    """Lance le juge. Rend le verdict normalisé — et jamais une erreur silencieuse :
-    un échec d'exécution est un INSUFFISANT explicite."""
-    h = os.environ.get("HOME")
-    claude = os.path.join(h, ".local/bin/claude") if h is not None else "claude"
-    # `claude` est une fonction zsh sur cette machine : appelée par son nom
-    # depuis un shell non interactif, elle casse. On appelle le binaire, et on
-    # retire CLAUDE_CONFIG_DIR, que le socle interdit de poser.
+    """Lance le juge — le CLI Copilot en une passe (`copilot -p`), sans outils,
+    sans instructions du projet, sans serveurs MCP. Rend le verdict normalisé —
+    et jamais une erreur silencieuse : un échec d'exécution est un INSUFFISANT
+    explicite."""
+    import copilot
+    exe = copilot.executable()
+    if exe is None:
+        return ("INSUFFISANT CLI Copilot introuvable : poser HARNAIS_COPILOT, installer copilot "
+                "dans PATH ou le SDK")
+    c = [exe, "-p", invite_, "--silent", "--no-custom-instructions", "--disable-builtin-mcps",
+         "--available-tools", "--no-ask-user", "--no-auto-update", "--no-remote-export"]
+    modele = os.environ.get("HARNAIS_MODELE_JUGE", "").strip()
+    if modele:
+        c += ["--model", modele]
     env = dict(os.environ)
-    env.pop("CLAUDE_CONFIG_DIR", None)
-    # Le juge tourne dans le dossier de l'agent : sans ça, sa fin de tour
-    # synchronisait la liste de l'agent en même temps que lui (10/09).
+    # Le juge tourne dans le dossier de l'agent : sans ça, ses propres hooks
+    # (briefing, fin de tour) partiraient pendant qu'il juge.
     env["HARNAIS_JUGE"] = "1"
     try:
-        r = subprocess.run([claude, "-p", "--model", MODELE, invite_], env=env,
-                           stdin=subprocess.DEVNULL,
+        r = subprocess.run(c, env=env, stdin=subprocess.DEVNULL,
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     except OSError as e:
         return "INSUFFISANT le relecteur n'a pas pu être lancé (%s)" % _erreur_io(e)

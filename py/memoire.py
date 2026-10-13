@@ -105,8 +105,8 @@ def git_sans_cache(depart, args):
 
 
 def depart_defaut():
-    """Le point de départ : `CLAUDE_PROJECT_DIR`, sinon le dossier courant."""
-    d = os.environ.get("CLAUDE_PROJECT_DIR")
+    """Le point de départ : `COPILOT_PROJECT_DIR`, sinon le dossier courant."""
+    d = os.environ.get("COPILOT_PROJECT_DIR")
     if d:
         return d
     try:
@@ -160,8 +160,11 @@ def racine_depot(depart):
 
 
 def base(depart):
-    """`<racine>/memoire`, ou `None` si ce projet n'est pas déporté."""
-    r = racine_depot(depart)
+    """`<arbre courant>/memoire`, ou `None` si ce projet n'est pas déporté.
+
+    COPILOT : l'arbre COURANT, pas le dépôt principal — l'app isole chaque
+    session dans une copie de travail, qui a sa propre mémoire."""
+    r = arbre_courant(depart)
     if r is None:
         return None
     b = os.path.join(r, NOM)
@@ -197,6 +200,10 @@ def lot(depart):
         return ""           # hors de l'arbre : comme relative_to qui lève
     if len(p) >= 2 and p[0] == "agents":
         return "%s/%s" % (p[0], p[1])
+    # COPILOT, forme compacte : l'agent n'a pas de dossier `agents/<nom>/`, le
+    # harnais se place dans son esprit (`brain/mind/<nom>`, voir `agent`).
+    if len(p) >= 3 and p[0] == "brain" and p[1] == "mind":
+        return "brain/mind/%s" % p[2]
     return ""
 
 
@@ -400,7 +407,7 @@ def resous_depuis(ou_git, depart):
     Les deux coïncident presque toujours, et c'est ce qui rend la confusion
     invisible. Mais la garde de commit juge l'index du dépôt où `git commit`
     s'exécute — le DOSSIER COURANT — pendant que la position de l'agent se lit
-    sur `CLAUDE_PROJECT_DIR`. Les confondre ne se voit que si les deux pointent
+    sur `COPILOT_PROJECT_DIR`. Les confondre ne se voit que si les deux pointent
     des dépôts différents, et alors on juge le mauvais index en silence.
     """
     ou_git, depart = str(ou_git), str(depart)
@@ -421,6 +428,10 @@ def resous_depuis(ou_git, depart):
     # c'est ce qui rend la confusion invisible onze fois sur douze.
     a = arbre_courant(ou_git)
     arbre = (_canon(a) if a is not None else None) or racine
+    # COPILOT : l'app isole les sessions en copies de travail — leurs faits et
+    # leur état appartiennent à la copie, JAMAIS au dossier principal. Aucun
+    # repli : une copie sans mémoire est une copie sans mémoire.
+    racine = arbre
     l = lot(depart)
     lp = l + "/" if l else ""
     # CANONICALISÉ, comme `arbre`. `racine_depot()` rend ce que git écrit — sous
@@ -430,7 +441,7 @@ def resous_depuis(ou_git, depart):
     # `strip_prefix` entre les deux ne mord pas, et rien ne le signale. Trouvé
     # par la chaîne de construction, sur Windows seulement — le portage diverge
     # sur les bords, jamais au milieu.
-    b0 = base(ou_git)
+    b0 = base_projet(racine)
     deportee = (_canon(b0) or b0) if b0 is not None else None
 
     depart_c = _canon(depart) or depart

@@ -1,18 +1,22 @@
 # -*- coding: utf-8 -*-
 """OÙ LE HARNAIS ÉCRIT, ET OÙ IL LIT — le seul endroit qui connaît les chemins.
 
-Port de `harnais/src/socle.rs` (Rust, 0.12.8). Mêmes noms de fonctions.
+Repris du harnais Claude (Python), adapté à `harnais/src/socle.rs` du Copilot
+(Rust, 1.3.0). Mêmes noms de fonctions.
 
-Deux variables décident de tout, et elles viennent du plugin :
+Deux variables décident de tout, et Copilot CLI les pose pour chaque hook de
+plugin (lu dans le CLI 1.0.90-0, qui les définit par paires) :
 
-- `CLAUDE_PLUGIN_DATA` : un dossier qui SURVIT AUX MISES À JOUR. C'est là que
+- `COPILOT_PLUGIN_DATA` : un dossier qui SURVIT AUX MISES À JOUR. C'est là que
   vivent les témoins, le journal des blocages, les leçons. Le code se remplace,
   pas ce qu'il a appris.
-- `CLAUDE_PLUGIN_ROOT` : où le code est posé. Chemin ABSOLU, ce qui ferme le
+- `COPILOT_PLUGIN_ROOT` : où le code est posé. Chemin ABSOLU, ce qui ferme le
   piège mesuré du chemin relatif : sur un clone Windows, un lien symbolique
   devient un fichier texte et les hooks disparaissent sans bruit.
 
-Hors plugin, les deux sont absentes et tout retombe sur `~/.claude`.
+Sans elles, l'état reste dans `~/.copilot/plugin-data/atelier-copilot/harnais`,
+le dossier que Copilot attribue à ce plugin. Résoudre ce chemin ne crée aucun
+dossier : seule l'écriture le fait.
 """
 import json
 import os
@@ -57,18 +61,23 @@ def maison():
     return os.environ.get("HOME") or os.environ.get("USERPROFILE") or "."
 
 
+def chemin_etat(donnees, maison_copilot):
+    return donnees if donnees else os.path.join(maison_copilot, "plugin-data", "atelier-copilot", "harnais")
+
+
 def socle():
-    """Le dossier d'état. `CLAUDE_PLUGIN_DATA` d'abord, `~/.claude` sinon."""
-    d = os.environ.get("CLAUDE_PLUGIN_DATA")
-    return d if d else os.path.join(maison(), ".claude")
+    """Le dossier d'état. `COPILOT_PLUGIN_DATA` d'abord (puis `PLUGIN_DATA`)."""
+    import hote
+    d = os.environ.get("COPILOT_PLUGIN_DATA") or os.environ.get("PLUGIN_DATA")
+    return chemin_etat(d, hote.maison_copilot())
 
 
 def livre():
     """Le dossier du paquet, ou None hors plugin. Sert à retrouver ce qui est
     LIVRÉ (critères de relecture, liste des rechutes d'origine) par opposition à
     ce que l'agent a écrit depuis."""
-    d = os.environ.get("CLAUDE_PLUGIN_ROOT")
-    return d if d else None
+    import copilot
+    return copilot.paquet_ou_rien()
 
 
 def cle_memoire(brut):

@@ -13,7 +13,7 @@ import sys
 
 MINIMUM = (3, 9)
 # Les hooks qui REFUSENT quand ils sont absents rendent 2 ; tous les autres 1.
-_REFUSE = ("mind-guard",)
+_REFUSE = ("mind-guard", "perimetre")
 
 
 def _trop_vieux(sous):
@@ -25,34 +25,41 @@ def _trop_vieux(sous):
     sys.exit(2 if sous in _REFUSE else 1)
 
 
-# (module, fonction, façon de l'appeler)
+# (module, fonction, façon de l'appeler, préparation de la charge)
 #   stdin : la charge JSON du hook, lue sur l'entrée standard, passée en texte
 #   args  : la liste des arguments, sans le nom de la sous-commande
 #   code  : comme `args`, mais la fonction rend le code de sortie
+# Préparation (hooks seulement, voir `hote`) : « agent » résout aussi l'agent
+# actif dans le journal de session ; « sans-agent » non (une lecture de faits
+# part à chaque lecture) ; « commit » ne le résout que pour un `git commit`.
 TABLE = {
-    "usage":         ("usage", "main", "stdin"),
-    "refus-auto":    ("refus_auto", "main", "stdin"),
-    "journal":       ("journal", "main", "stdin"),
-    "attente":       ("attente", "main", "stdin"),
-    "briefing":      ("briefing", "main", "stdin"),
-    "mind-guard":    ("mind_guard", "main", "stdin"),
-    "carnet":        ("carnet", "main", "args"),
-    "carnet-essai":  ("carnet", "essai", "args"),
-    "equipe-amorce": ("carnet", "amorce_cli", "code"),
-    "memoire":       ("memoire", "main", "args"),
-    "resolution":    ("memoire", "resolution_json", "code"),
-    "todo-blocs":    ("attente", "todo_blocs", "code"),
-    "curateur":      ("curateur", "main", "code"),
-    "relecture":     ("relecture", "main", "args"),
-    "diagnostic":    ("diagnostic", "main", "args"),
-    "adopte":        ("adopte", "main", "code"),
-    "menage":        ("menage", "main", "code"),
-    "atelier-monte": ("atelier", "main", "code"),
-    "equipe":        ("equipe", "main", "code"),
-    "equipe-vue":    ("vue", "main", "code"),
-    "brain-migre":   ("migration", "main", "code"),
-    "bascule":       ("bascule", "main", "code"),
+    "lecture":       ("poids", "main", "stdin", "sans-agent"),
+    "journal":       ("journal", "main", "stdin", "commit"),
+    "attente":       ("attente", "main", "stdin", "agent"),
+    "briefing":      ("briefing", "main", "stdin", "agent"),
+    "mind-guard":    ("mind_guard", "main", "stdin", "commit"),
+    "perimetre":     ("copilot", "garde", "stdin", "agent"),
+    "carnet":        ("carnet", "main", "args", None),
+    "carnet-essai":  ("carnet", "essai", "args", None),
+    "equipe-amorce": ("carnet", "amorce_cli", "code", None),
+    "memoire":       ("memoire", "main", "args", None),
+    "resolution":    ("memoire", "resolution_json", "code", None),
+    "todo-blocs":    ("attente", "todo_blocs", "code", None),
+    "curateur":      ("poids", "curateur", "code", None),
+    "relecture":     ("relecture", "main", "args", None),
+    "diagnostic":    ("diagnostic", "main", "args", None),
+    "agent":         ("agent", "main", "code", None),
+    "adopte":        ("adopte", "main", "code", None),
+    "menage":        ("menage", "main", "code", None),
+    "atelier-monte": ("atelier", "main", "code", None),
+    "equipe":        ("equipe", "main", "code", None),
+    "equipe-vue":    ("vue", "main", "code", None),
+    "brain-migre":   ("migration", "main", "code", None),
 }
+
+# Les hooks que `HARNAIS_JUGE` fait taire : le juge lancé par `copilot -p`
+# déclencherait sinon les hooks du harnais, en boucle.
+_JUGE_MUET = ("briefing", "attente", "mind-guard", "perimetre", "journal", "lecture")
 
 AIDE = """harnais — le socle agentique
 
@@ -69,24 +76,23 @@ POSER LE HARNAIS SUR UN PROJET — le seul geste à connaître pour démarrer :
                à blanc par défaut · `--apply` · `--racine R` pour un atelier
 
 À LA MAIN, pour comprendre ce que je vois :
-  curateur     la mémoire auto de ce projet : ce qui sert, ce qui dort,
-               ce qu'un résultat a démenti · `--appliquer` pour ranger
+  curateur     la confiance des sections de faits (brain/poids.json), lecture seule
   resolution   où vit la mémoire de ce dossier (JSON complet)
   memoire      la même, restreinte — sert à comparer deux versions
-  bascule      bascule un projet d'un canal de hooks à l'autre
   version      la version du paquet, et l'état du code qui l'a produite
 
 APPELÉES PAR LE HARNAIS (chacune lit sa charge JSON sur l'entrée standard) :
-  usage        PostToolUse/Read — note qu'une note de mémoire a servi
-  refus-auto   PermissionDenied — note qu'un geste a été refusé par le mode auto
   journal      PostToolUse/Bash — écrit ce qui a été commité
-  attente   Stop — ce qui attend le commanditaire, et les gardes
-  briefing  SessionStart/UserPromptSubmit — le briefing d'entrée
+  lecture      PostToolUse/Read|Bash — note les sections de faits lues
+  attente   Stop — ce qui attend @user, et les gardes
+  briefing  SessionStart/userPromptTransformed — le briefing d'entrée
   carnet    lecture du carnet d'équipe (JSON, pour comparer)
   equipe-amorce  crée le carnet d'équipe — appelé UNE fois, à la conversion
-  mind-guard PreToolUse/Bash — garde les faits du projet et la déclaration d'état
+  mind-guard PreToolUse/Bash — garde les faits et la déclaration d'état
+  perimetre   PreToolUse/Edit|Write — refuse les écritures hors lot
   relecture    lance le juge sur les demandes en attente
   diagnostic   ce que je trouve, ce que je ne trouve pas, et par quel shell
+  agent        l'agent actif d'une session : journal lu, règle appliquée (lecture seule)
   carnet-essai un banc du carnet, pour les contrôles
   todo-blocs   les blocs du todo tels que la fin de tour les lit (JSON)
 """
@@ -115,7 +121,7 @@ def _identite():
     racine = os.path.dirname(ici)
     version = "inconnue"
     try:
-        with open(os.path.join(racine, ".claude-plugin", "plugin.json"), encoding="utf-8") as f:
+        with open(os.path.join(racine, ".github", "plugin", "plugin.json"), encoding="utf-8") as f:
             version = json.load(f).get("version", version)
     except (OSError, ValueError):
         pass
@@ -141,11 +147,14 @@ def main(argv):
         return 0
     cible = TABLE.get(sous)
     if cible is None:
-        # On le DIT, mais on ne bloque pas : un hook mal câblé ne doit pas
-        # arrêter l'agent, il doit se voir dans le journal de débogage.
+        # On le DIT, et le code est 1 : sous Copilot un hook mal câblé se voit
+        # comme une panne de hook, il n'arrête pas l'agent.
         sys.stderr.write("harnais : sous-commande inconnue « %s »\n" % sous)
+        return 1
+    import os
+    if os.environ.get("HARNAIS_JUGE") and sous in _JUGE_MUET:
         return 0
-    nom_module, nom_fonction, facon = cible
+    nom_module, nom_fonction, facon, prep = cible
     # Le dossier de ce fichier est déjà en tête de sys.path (c'est le script) :
     # `import usage` trouve py/usage.py, sans paquet ni installation.
     try:
@@ -156,6 +165,13 @@ def main(argv):
                 texte = sys.stdin.read()
             except (OSError, UnicodeDecodeError):
                 texte = ""
+            import hote
+            if prep == "agent":
+                texte = hote.prepare(texte)
+            elif prep == "sans-agent":
+                texte = hote.prepare_sans_agent(texte)
+            elif prep == "commit":
+                texte = hote.prepare_si_commit(texte)
             rendu = fonction(texte)
         else:
             rendu = fonction(argv[1:])
@@ -166,6 +182,13 @@ def main(argv):
         # ni bloquant (code 1 : l'erreur se voit, la commande de l'agent passe).
         import traceback
         ou = traceback.extract_tb(e.__traceback__)[-1]
+        if sous == "perimetre":
+            # LA SEULE GARDE FERMÉE DANS LE DOUTE : une panne refuse l'écriture,
+            # et le dit — comme une charge illisible.
+            import hote
+            sys.stdout.write(hote.refus("garde de périmètre en panne (%s: %s) : écriture refusée"
+                                        % (type(e).__name__, e)) + "\n")
+            return 0
         sys.stderr.write("harnais : erreur interne dans « %s » — %s: %s (%s:%s). "
                          "Le garde n'a pas jugé.\n" % (sous, type(e).__name__, e,
                                                       ou.filename.rsplit("/", 1)[-1], ou.lineno))

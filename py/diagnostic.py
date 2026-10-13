@@ -47,6 +47,8 @@ def env_ou(cle):
 
 
 def taille(p):
+    if not os.path.exists(p):
+        return "%s (absent)" % p
     try:
         n = len(os.listdir(p))
     except OSError:
@@ -112,35 +114,23 @@ def main(args):
         sys.executable or "?", sys.version_info[0], sys.version_info[1], sys.version_info[2]),
         "interpréteur introuvable — cas très rare, à signaler")
 
-    # ── LE SHELL, et c'est le point qui décide sur Windows ───────────────────
-    # Le lanceur des hooks est du shell POSIX. Confié à `cmd`, il meurt sur une
-    # erreur de syntaxe : aucune sortie, aucun hook, aucun mot. C'est la panne
-    # la plus vicieuse du dispositif — tout est installé, et rien ne part.
-    # Le programme ne peut pas voir qui l'a lancé, mais l'environnement le
-    # trahit : un shell POSIX sous Windows pose `MSYSTEM`.
+    # ── LE SHELL DES HOOKS ───────────────────────────────────────────────────
+    # Copilot choisit le champ du hook selon l'OS : `powershell` sous Windows,
+    # `bash` ailleurs. Un hook dont le champ manque pour cet OS ne part pas, et
+    # ne le dit pas.
     print("\n  PAR QUEL SHELL")
-    msys = env_ou("MSYSTEM")
-    gitbash = env_ou("CLAUDE_CODE_GIT_BASH_PATH")
-    if sys.platform.startswith("win"):
-        dit("shell POSIX (MSYSTEM)", msys,
-            "AUCUN SIGNE. Si les hooks ne partent pas, c'est ici qu'il faut regarder : "
-            "le lanceur est du shell POSIX et `cmd` ne sait pas le lire.")
-        dit("chemin déclaré vers bash", gitbash,
-            "non posée. Sur un poste où `Git\\bin` n'est pas dans le PATH, "
-            "c'est elle qui dit à l'outil quel shell employer.")
-    else:
-        dit("shell POSIX", env_ou("SHELL") or "présent", "")
-        dit("MSYSTEM", msys, "normal hors Windows")
+    print("  %-26s %s" % ("hooks sur cet OS", "PowerShell (champ powershell)"
+                          if sys.platform.startswith("win") else "bash (champ bash)"))
+
+    # ── CE QUE L'HÔTE A POSÉ ─────────────────────────────────────────────────
+    print("\n  VARIABLES DE L'HÔTE")
+    for k in sorted(k for k in os.environ if k.startswith("COPILOT_") or k.startswith("PLUGIN_")):
+        sensible = any(x in k for x in ("TOKEN", "SECRET", "KEY", "PASSWORD"))
+        dit(k, "(masquée)" if sensible else os.environ[k], "")
 
     # ── LE PAQUET ────────────────────────────────────────────────────────────
     print("\n  LE PAQUET")
-    racine_paquet = env_ou("CLAUDE_PLUGIN_ROOT")
-    dit("dossier du paquet", racine_paquet,
-        "non posé. Le programme tourne donc HORS paquet — appelé à la main, "
-        "ou déclaré par des chemins écrits en dur.")
-    dit("dossier de données", env_ou("CLAUDE_PLUGIN_DATA"),
-        "non posé : l'état retombe sur le dossier personnel, ce qui est le "
-        "comportement de repli prévu")
+    dit("dossier du paquet", socle.livre(), "introuvable")
     s = socle.socle()
     dit("où l'état s'écrit", taille(s), "")
     if not os.path.exists(s):

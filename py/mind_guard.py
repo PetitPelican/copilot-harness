@@ -27,7 +27,9 @@ dans des fonctions qui importent à la demande.
 """
 
 # --- à ajuster selon le projet ---------------------------------------------
-PREFIXES_IGNORES = [".claude/", ".mind/", ".fact/", "docs/", ".memory/", ".logs/"]
+# `.github/copilot/` : les réglages, profils et périmètres du harnais Copilot.
+# `.claude/` reste ignoré : Copilot lit aussi ce dossier, ce n'est pas du code.
+PREFIXES_IGNORES = [".github/copilot/", ".claude/", ".mind/", ".fact/", "docs/", ".memory/", ".logs/"]
 # L'ESPACE DES LIVRABLES (Maxime, 12/10/2026 : « un espace dédié aux livrables, et
 # on va l'appeler Assets ») : ce qu'un agent PRODUIT — plans, analyses, requêtes,
 # scripts livrés — vit dans `assets/` (mono-agent) ou `assets/<nom>/` (un dossier
@@ -36,6 +38,11 @@ PREFIXES_IGNORES = [".claude/", ".mind/", ".fact/", "docs/", ".memory/", ".logs/
 # à jour. Né dans le harnais Copilot sous le nom `outputs/`. Seul le dossier de
 # la RACINE du projet (ou du lot) compte : `src/assets/` d'un site reste du code.
 ESPACE_LIVRABLES = "assets/"
+# LES ANCIENS NOMS, toujours lus : un projet Copilot pas encore migré garde ses
+# livrables hors du code — `outputs/` (1.2 à 1.3) et `brain/workbench/` (0.19 à
+# 1.1). Le même nom que `agent.BANC` et `agent.BANCS_ANCIENS`, écrit ici sans
+# import : ce module ne charge rien avant d'en avoir besoin.
+ESPACES_LIVRABLES_ANCIENS = ["outputs/", "brain/workbench/"]
 EXT_CODE = [
     ".py", ".sql", ".qmd", ".ipynb", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
     ".go", ".rs", ".java", ".kt", ".rb", ".php", ".c", ".h", ".hpp", ".cpp", ".cc",
@@ -98,11 +105,8 @@ def autorise(cmd, mot):
 
 
 def refus(motif):
-    return {"hookSpecificOutput": {
-        "hookEventName": "PreToolUse",
-        "permissionDecision": "deny",
-        "permissionDecisionReason": motif,
-    }}
+    """COPILOT : `permissionDecision` à la RACINE de l'objet (voir `hote`)."""
+    return {"permissionDecision": "deny", "permissionDecisionReason": motif}
 
 
 def entete(texte):
@@ -170,7 +174,7 @@ def est_du_code(f, lot, projet):
     """Deux jeux de préfixes à ignorer, pas un : le harnais de l'AGENT et celui du
     PROJET. N'ignorer que le second faisait compter `agents/ios/.claude/hooks/`
     pour du code projet."""
-    for p in PREFIXES_IGNORES + [ESPACE_LIVRABLES]:
+    for p in PREFIXES_IGNORES + [ESPACE_LIVRABLES] + ESPACES_LIVRABLES_ANCIENS:
         if f.startswith(lot + p) or f.startswith(projet + p):
             return False
     if f.startswith(projet + "site/") and not f.startswith(projet + "site/_content/"):
@@ -290,7 +294,7 @@ def juge(entree, depart):
     from memoire import Forme
     # GIT TOURNE DEPUIS LE DOSSIER COURANT, PAS DEPUIS `depart`. La version
     # Python appelle `_git` sans `cwd`, donc depuis le processus ; `depart`
-    # (`CLAUDE_PROJECT_DIR`) ne sert qu'à l'arithmétique de chemins. Les
+    # (`COPILOT_PROJECT_DIR`) ne sert qu'à l'arithmétique de chemins. Les
     # confondre ne se voit que si les deux pointent des dépôts DIFFÉRENTS —
     # et alors le garde jugerait l'index du mauvais dépôt.
     courant = _cwd(depart)
@@ -379,9 +383,9 @@ def juge(entree, depart):
             if touches:
                 return (
                     "mind-guard : ce commit modifie `.fact/` (%s). Ces fichiers sont partagés par "
-                    "TOUS les agents du projet et ne s'écrivent qu'à la demande du commanditaire — un "
+                    "TOUS les agents du projet et ne s'écrivent qu'à la demande de @user — un "
                     "agent qui les réécrit depuis son lot efface le travail d'un autre en silence. Si "
-                    "le commanditaire l'a demandé, ajoute ` # fact-ok` à la fin de la commande : "
+                    "@user l'a demandé, ajoute ` # fact-ok` à la fin de la commande : "
                     "l'autorisation restera dans l'historique." % echantillon(touches, 4))
 
     # 0 bis. LE PLAFOND, ET IL PORTE SUR LES NOMS.
@@ -413,7 +417,7 @@ def juge(entree, depart):
                         intrus.append(reste)
             if intrus:
                 return (
-                    "mind-guard : ce commit ajoute un fichier de faits que le socle ne prévoit pas (%s). Les faits d'un projet tiennent en quatre noms — `base`, `architecture`, `stack`, `rules` — plus `roles` à plusieurs agents et `workflow` pour tous, et ce plafond existe pour qu'on sache toujours où chercher. Un cinquième nom se demande au commanditaire. S'il l'a accordé, ajoute ` # fact-neuf` à la fin de la commande."
+                    "mind-guard : ce commit ajoute un fichier de faits que le socle ne prévoit pas (%s). Les faits d'un projet tiennent en quatre noms — `base`, `architecture`, `stack`, `rules` — plus `roles` à plusieurs agents et `workflow` pour tous, et ce plafond existe pour qu'on sache toujours où chercher. Un cinquième nom se demande à @user. S'il l'a accordé, ajoute ` # fact-neuf` à la fin de la commande."
                     % echantillon(intrus, 4))
     if r.prefixe_mind and not autorise(cmd, "mind-neuf"):
         intrus = []
@@ -424,7 +428,7 @@ def juge(entree, depart):
                     intrus.append(reste)
         if intrus:
             return (
-                "mind-guard : ce commit ajoute un fichier d'état que le socle ne prévoit pas (%s). L'esprit d'un agent tient en deux fichiers — `state` et `todo` — et le reste se range dans `docs/`, dans les faits, ou dans la mémoire auto selon ce que c'est. Un troisième nom se demande au commanditaire. S'il l'a accordé, ajoute ` # mind-neuf` à la fin de la commande."
+                "mind-guard : ce commit ajoute un fichier d'état que le socle ne prévoit pas (%s). L'esprit d'un agent tient en deux fichiers — `state` et `todo` — et le reste se range dans `docs/`, dans les faits, ou dans la mémoire auto selon ce que c'est. Un troisième nom se demande à @user. S'il l'a accordé, ajoute ` # mind-neuf` à la fin de la commande."
                 % echantillon(intrus, 4))
 
     if autorise(cmd, "mind-ok"):

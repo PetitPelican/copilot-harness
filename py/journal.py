@@ -85,11 +85,16 @@ def suffixe_agent(racine, projet):
     rel = memoire._strip_prefix(a, b)
     if rel is None:
         return ""
-    if len(rel) != 2 or rel[0] != "agents":
+    # COPILOT, forme compacte : le harnais se place dans `brain/mind/<nom>`.
+    if len(rel) == 2 and rel[0] == "agents":
+        nom = rel[1]
+    elif len(rel) == 3 and rel[0] == "brain" and rel[1] == "mind":
+        nom = rel[2]
+    else:
         return ""
     out = []
     tiret = False
-    for c in rel[1]:
+    for c in nom:
         if (c.isascii() and c.isalnum()) or c in "._-":
             out.append(c)
             tiret = False
@@ -174,7 +179,7 @@ def main(entree):
     court, jour, iso, sujet, auteur = ch
 
     fichier = os.path.join(racine, DOSSIER, "%s%s.md" % (
-        jour, suffixe_agent(racine, os.environ.get("CLAUDE_PROJECT_DIR"))))
+        jour, suffixe_agent(racine, os.environ.get("COPILOT_PROJECT_DIR"))))
     try:
         with open(fichier, encoding="utf-8", newline="") as h:
             deja = h.read()
