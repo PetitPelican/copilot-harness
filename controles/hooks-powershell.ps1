@@ -55,6 +55,13 @@ function Invoke-Hook([string]$Shell, [string]$Command, [object]$Payload, [hashta
     $p.WaitForExit()
     return @{ code = $p.ExitCode; out = $out.Trim(); err = $err.Result }
 }
+function Decision($R) {
+    # La decision du hook, ou '' - jamais une erreur de propriete qui cache la sortie.
+    if (-not $R.out) { return '' }
+    try { $o = $R.out | ConvertFrom-Json } catch { return "illisible: $($R.out)" }
+    if ($o -and $o.PSObject.Properties['permissionDecision']) { return $o.permissionDecision }
+    return ''
+}
 function Invoke-Git([string[]]$Arguments) {
     & git -c user.name=Test -c user.email=test@example.invalid -c commit.gpgsign=false @Arguments
     if ($LASTEXITCODE -ne 0) { throw "git a echoue : $Arguments" }
@@ -96,7 +103,7 @@ try {
                 Invoke-Git @('add', "code-$sh.py")
                 $commit = @{ cwd = $projet; toolName = 'powershell'; toolArgs = @{ command = 'git commit -m code' } }
                 $r = Invoke-Hook $sh (Hook-Command 'PreToolUse' 'Bash') $commit $env1
-                Assert ($r.code -eq 0 -and ($r.out | ConvertFrom-Json).permissionDecision -eq 'deny') "[$sh] commit sans etat autorise : $($r.out) $($r.err)"
+                Assert ($r.code -eq 0 -and (Decision $r) -eq 'deny') "[$sh] commit sans etat autorise : code $($r.code) out [$($r.out)] err [$($r.err)]"
                 $commit.toolArgs.command = 'git commit -m code # mind-ok'
                 $r = Invoke-Hook $sh (Hook-Command 'PreToolUse' 'Bash') $commit $env1
                 Assert ($r.code -eq 0 -and $r.out -eq '') "[$sh] mind-ok refuse : $($r.out)"
@@ -112,7 +119,7 @@ try {
                 [IO.File]::WriteAllText((Join-Path $agent '.github\copilot\perimetre.json'), (@{ deny = @($autre) } | ConvertTo-Json))
                 $ecrit = @{ cwd = $agent; toolName = 'create'; toolArgs = @{ path = (Join-Path $autre 'x.txt') } }
                 $r = Invoke-Hook $sh (Hook-Command 'PreToolUse' 'Edit|Write') $ecrit $env1
-                Assert (($r.out | ConvertFrom-Json).permissionDecision -eq 'deny') "[$sh] perimetre laisse passer : $($r.out) $($r.err)"
+                Assert ((Decision $r) -eq 'deny') "[$sh] perimetre laisse passer : code $($r.code) out [$($r.out)] err [$($r.err)]"
                 $ecrit.toolArgs.path = Join-Path $agent 'x.txt'
                 $r = Invoke-Hook $sh (Hook-Command 'PreToolUse' 'Edit|Write') $ecrit $env1
                 Assert ($r.code -eq 0 -and $r.out -eq '') "[$sh] perimetre refuse dans le lot : $($r.out)"
