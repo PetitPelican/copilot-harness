@@ -382,7 +382,7 @@ Le dernier ne dépend d'aucune commande, et c'est ce qui fait sa valeur.
 
 - **`attente`** (`agentStop` / `Stop`) — se déclenche **à chaque fin de tour**, quand l'agent
   rend la main. Il la refuse (sortie JSON `{"decision":"block","reason":"…"}`) si du code a bougé sans que
-  `brain/mind/todo.md` suive, parmi quatorze gardes, puis reporte ce qui attend
+  `brain/mind/todo.md` suive, parmi cinq gardes, puis reporte ce qui attend
   l'humain là où il le lira vraiment.
 
   **Pourquoi `todo.md` a quitté le hook du commit.** Il y était, et ça ne

@@ -148,6 +148,19 @@ recopie pas, ni tes conclusions, ni les questions que tu as déjà posées dans 
 Fais ce qui est demandé, puis termine par une ou deux lignes qui disent ce que tu as \
 changé.";
 
+/// LES SEULES GARDES QUI RENVOIENT L'AGENT AU TRAVAIL. Les autres (réponses et
+/// demandes venues des Rappels, `!cible`, constats rejouables, forme des
+/// questions, liste des rechutes, acharnement sur la cible, relecteur) restent
+/// codées mais ne s'exécutent plus : sous Copilot elles produisaient des renvois
+/// affichés comme de faux messages de l'utilisateur, sans rien apporter au suivi.
+/// Garder : le todo à jour après du code (B1), le carnet d'équipe (B5), les faits
+/// (B6), les questions à poser (B13) et leur ligne Notion (B14, canal Notion seul).
+const GARDES_ACTIVES: &[&str] = &[
+    "B1-code-sans-todo", "B5-carnet", "B6-faits", "B13-poser", "B14-notion",
+];
+
+fn active(quoi: &str) -> bool { GARDES_ACTIVES.contains(&quoi) }
+
 /// Ce que dit une garde, en clair : la phrase que lit quelqu'un qui ne connaît pas
 /// le harnais. Une garde absente de cette liste n'est jamais muette : elle
 /// retombe sur la formule générale.
@@ -2022,7 +2035,8 @@ prends-le, note l'hypothèse, et continue.", ech)),
     // UN SEUL aller-retour vers les Rappels par tour : les trois blocs qui
     // suivent lisent la même photo. Elle doit être prise ICI, avant le premier
     // qui s'en sert — l'ordre des blocs a déjà changé une fois.
-    let (coches, demandes, rep) = if notion { (Vec::new(), Vec::new(), Vec::new()) }
+    let rappels_lus = active("B2-reponse") || active("B3-tranche") || active("B4-demande");
+    let (coches, demandes, rep) = if notion || !rappels_lus { (Vec::new(), Vec::new(), Vec::new()) }
                                   else { rappels_etat(&agent, 60.0) };
 
     // --- 1 bis. CE QU'IL A ÉCRIT DANS LE RAPPEL -----------------------------
@@ -2117,7 +2131,7 @@ l'as vue.", neuves.len(), format!("{}\n\n{}", AVERTI, encadre(&liste)))),
     // --- 1 ter ter. CE QU'IL T'A DEMANDÉ DANS LE FIL — `!cible` -------------
     // La même garde que la précédente, seconde source : la conversation. Elle
     // ne dépend pas des Rappels, donc elle tient aussi là où ils n'existent pas.
-    {
+    if active("B4-cible") {
         let f = etat_dir().join(format!("{}.cibles", slug(&agent)));
         let r = cibles_a_rappeler(&f, &lis(&todo));
         if !r.is_empty() {
@@ -2268,7 +2282,7 @@ l'autorisation restera dans l'historique.", ech.join(", "))),
     let manquants: Vec<&Att> = attente.iter()
         .filter(|t| t.i < specs.len() && specs[t.i].as_ref().map(|s| s.sans).unwrap_or(false))
         .collect();
-    if !manquants.is_empty() {
+    if active("B7-constat-sans-rejeu") && !manquants.is_empty() {
         let sig = sha16(&format!("constat|{}|{}", empreinte, manquants.len()));
         let temoin = etat_dir().join(format!("{}.constat", session));
         if lis(&temoin).trim() != sig {
@@ -2305,6 +2319,7 @@ tâche et non un constat, retire `?constat`.", manquants.len(), ech)),
     let jour = chrono::Local::now().format("%d/%m").to_string();
     let indices: Vec<usize> = attente.iter().enumerate()
         .filter(|(_, x)| x.i < specs.len() && specs[x.i].as_ref().map(|s| !s.sans).unwrap_or(false))
+        .filter(|_| active("B9-tombe"))
         .map(|(n, _)| n).take(CONSTAT_MAX).collect();
     for n in indices {
         let t0 = std::time::Instant::now();
@@ -2367,7 +2382,8 @@ tâche et non un constat, retire `?constat`.", manquants.len(), ech)),
     // le bloc : un projet sans cible et un projet dont la cible n'a pas été
     // lue doivent se distinguer dans la sortie.
     let d_f = d_fact.clone().unwrap_or_else(|| racine.join(&lot).join(".fact"));
-    let (phrase, specs_cible) = consigne(Some(&d_f));
+    let (phrase, specs_cible) = if active("B11-acharnement") { consigne(Some(&d_f)) }
+                                else { (None, Vec::new()) };
     if let Some(phrase) = phrase {
         let f_cible = etat_dir().join(format!("{}.cible", slug(&agent)));
         // UNE CIBLE SANS MESURE N'EST PAS UNE CIBLE NON MESURÉE. Les deux
@@ -2485,7 +2501,7 @@ et continue ton travail.\n\nJe te le redirai dans {} cycles si rien ne bouge.",
         deja.sort_by(|a, b| a.0.cmp(&b.0));
         let _ = std::fs::write(&vus_f, deja.iter()
             .map(|(h, n)| format!("{} {}", h, n)).collect::<Vec<_>>().join("\n"));
-        if n_mauvais > 0 && !forme_muette {
+        if active("B8-forme") && n_mauvais > 0 && !forme_muette {
             sortie(2, Some(format!(
 "attente : {} ligne(s) qui attend(ent) @user sont écrites comme des \
 CONSTATS, pas comme des questions : {}.\n\nUn constat lui laisse tout le travail \
@@ -2518,7 +2534,7 @@ permanent.", n_mauvais, ech)),
     // du code, des essais, une lecture — n'est JAMAIS interrompu : c'est la
     // condition pour qu'elle survive.
     let liste = rechutes();
-    if !liste.is_empty() && !attente.is_empty() {
+    if active("B10-rechutes") && !liste.is_empty() && !attente.is_empty() {
         // DEUX TÉMOINS, DEUX DURÉES DE VIE, et les confondre était l'erreur. Ce
         // qui a DÉJÀ été contrôlé appartient à l'agent et survit aux sessions ;
         // le PLAFOND appartient à la session, sinon il se remplit une fois pour
@@ -2577,6 +2593,7 @@ points-là.", n, liste)),
         .filter_map(|e| e.ok().map(|e| e.path()))
         .filter(|p| p.extension().map(|x| x == "verdict").unwrap_or(false))
         .collect()).unwrap_or_default();
+    if !active("B12-contredit") { lus.clear(); }
     lus.sort();
     for p in lus {
         let t = lis(&p);
@@ -2621,7 +2638,7 @@ points-là.", n, liste)),
         .map(|e| e.path().extension().map(|x| x == "demande").unwrap_or(false))
         .unwrap_or(false)).count()).unwrap_or(0);
     let mut deposes: Vec<String> = Vec::new();
-    if en_attente < 20 && !accueil {  // le juge est borné ; la file d'attente aussi
+    if active("B12-contredit") && en_attente < 20 && !accueil {  // le juge est borné ; la file d'attente aussi
         let _ = std::fs::create_dir_all(&dep);
         for t in &attente {
             // ON NE DÉPOSE QUE CE QUI AFFIRME QUELQUE CHOSE. Une question
@@ -2966,6 +2983,18 @@ mod essais {
         // Témoin négatif : le texte nu, celui qu'on écrivait avant, ne porte
         // aucune clé — mesuré invisible à code de sortie 0.
         assert!(serde_json::from_str::<Value>("bonjour").is_err());
+    }
+
+    #[test]
+    fn seules_cinq_gardes_renvoient_l_agent_au_travail() {
+        for q in ["B1-code-sans-todo", "B5-carnet", "B6-faits", "B13-poser", "B14-notion"] {
+            assert!(active(q), "{q} doit rester armée");
+            assert_ne!(libelle(q), libelle(""), "{q} a sa phrase en clair");
+        }
+        for q in ["B2-reponse", "B3-tranche", "B4-demande", "B4-cible", "B7-constat-sans-rejeu",
+                  "B8-forme", "B9-tombe", "B10-rechutes", "B11-acharnement", "B12-contredit"] {
+            assert!(!active(q), "{q} ne doit plus renvoyer l'agent");
+        }
     }
 
     #[test]

@@ -100,7 +100,7 @@ le risque de double chargement.
 | `userPromptTransformed` | le briefing est injecté à **chaque message**, dans un bloc `<harnais>` du message remis au modèle | `modifiedTransformedPrompt` |
 | `preToolUse` / `PreToolUse` | garde de commit et périmètre d'écriture `Edit|Write` | `permissionDecision: "deny"` + raison |
 | `postToolUse` / `PostToolUse` | journal des commits réussis ; `lecture` (sur `Read` et `Bash`) crédite les sections de faits lues | résultat / contexte |
-| `agentStop` / `Stop` | quatorze gardes de fin de tour | `{"decision":"block","reason":"…"}` |
+| `agentStop` / `Stop` | cinq gardes de fin de tour | `{"decision":"block","reason":"…"}` |
 
 Les noms PascalCase reçoivent des champs d'entrée `snake_case` ; les noms camelCase utilisent des champs `camelCase`.
 `userPromptSubmitted` ne permet pas à un hook de commande de modifier le
@@ -129,34 +129,33 @@ la déduplication n'est alors pas garantie.
 
 ---
 
-## 5. Les quatorze gardes de fin de tour
+## 5. Les cinq gardes de fin de tour
 
-C'est le cœur. Au moment où l'agent s'apprête à rendre la main, quatorze questions
+C'est le cœur. Au moment où l'agent s'apprête à rendre la main, cinq questions
 sont posées à l'état du projet. Chacune peut le renvoyer travailler.
 
 | | Ce qu'elle refuse |
 |---|---|
 | **B1** | du code a bougé et le fichier de tâches n'a pas suivi |
-| **B2** | l'humain a répondu à une question et la réponse n'a pas été traitée |
-| **B3** | une décision a été tranchée et rien n'en a été fait |
-| **B4** | une demande de l'humain n'a pas été prise en compte |
 | **B5** | un chantier partagé fini sans une ligne au carnet d'équipe |
 | **B6** | un fichier de faits touché sans l'autorisation explicite du commanditaire |
-| **B7** | un constat posé sans de quoi le **rejouer** plus tard |
-| **B8** | une question mal formée : pas fermée, sans dire ce que chaque réponse déclenche |
-| **B9** | une vérification qui est **tombée** et qu'on s'apprêtait à ignorer |
-| **B10** | une liste de contrôle des rechutes non rejouée avant d'affirmer |
-| **B11** | de l'acharnement : trois fois la même approche sans changer de méthode |
-| **B12** | un relecteur indépendant a **contredit** une affirmation qui part vers l'humain |
 | **B13** | une question **nouvelle** pour l'humain est rangée dans la liste sans être posée dans le message de fin de tour |
 | **B14** | sur un projet réglé sur Notion (`HARNAIS_CANAL=notion`) : une question pour l'humain sans le lien de sa ligne dans la base Décisions — et plus rien ne part vers les Rappels |
+
+Depuis 1.3.0, les autres gardes des versions précédentes ne s'exécutent plus : sous
+Copilot elles renvoyaient l'agent par de faux messages de l'utilisateur sans rien
+apporter au suivi. Il s'agit de B2, B3 et B4 (réponses et demandes venues des
+Rappels, demande `!cible`), B7 et B9 (constats rejouables et constats tombés), B8
+(forme des questions), B10 (liste des rechutes), B11 (acharnement sur la cible) et
+B12 (relecteur indépendant). Leur code reste dans `attente.rs`, derrière la liste
+`GARDES_ACTIVES` : en rajouter une dans cette liste suffit à la réarmer.
 
 ### Ce que l'humain voit quand une garde bloque
 
 Quand une garde renvoie l'agent au travail, l'app affiche sa raison dans la
 conversation **comme un message de l'utilisateur**, alors qu'il ne l'a pas
 écrit. Depuis 0.18.1, ce message commence par une signature (« rappel automatique
-du harnais, pas écrit par @user »), nomme la garde (`B8-forme`, par exemple) et dit
+du harnais, pas écrit par @user »), nomme la garde (`B13-poser`, par exemple) et dit
 en une phrase ce qu'elle a vu. Les exemples qu'il contient sont annoncés comme
 inventés. L'humain n'a rien à faire : l'agent corrige seul. Un test vérifie que
 chaque garde du code a sa phrase en clair.
@@ -565,9 +564,8 @@ session ; une nouvelle session reçoit encore l'accueil tant que le registre
 est vide. Après une adoption réussie, une entrée valide contient `name`,
 `path` et une liste `profiles` parmi OPS/PO/QA : l'accueil s'arrête.
 
-Pendant l'accueil, les gardes de **forme** de fin de tour (B8 forme des
-questions, B10 relecture des rechutes, B13 questions à poser) et le dépôt au
-relecteur se taisent : les questions de cadrage (« nouveau ou existant ? »)
+Pendant l'accueil, la garde de **forme** de fin de tour (B13 questions à
+poser) se tait : les questions de cadrage (« nouveau ou existant ? »)
 n'ont ni conséquences chiffrées ni critère « fini quand ». Les gardes d'état
 restent armées.
 

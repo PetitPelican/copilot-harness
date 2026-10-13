@@ -319,7 +319,7 @@ d'elles renvoie l'agent au travail, l'app affiche sa raison dans la
 conversation **comme un message de l'utilisateur**, alors qu'il ne l'a pas écrit.
 Depuis 0.18.1, ce message commence par une signature
 (`[Harnais — rappel automatique. Ce message n'a pas été écrit par @user.]`),
-nomme la garde (`B8-forme`, par exemple) et dit en une phrase ce qu'elle a vu.
+nomme la garde (`B13-poser`, par exemple) et dit en une phrase ce qu'elle a vu.
 L'utilisateur n'a rien à faire : l'agent corrige seul. Les exemples contenus
 dans ces messages sont inventés et sans rapport avec le projet.
 
