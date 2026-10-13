@@ -32,6 +32,22 @@ def lire(p):
         return f.read()
 
 
+# Écart d'hôte : git pour Windows convertit les fins de ligne à l'extraction
+# (core.autocrlf=true par défaut) ; la synchro, elle, transporte des octets.
+# Ces essais comparent des octets : on fige la conversion, sans toucher au poste.
+_SANS_CRLF = mock.patch.dict(os.environ, {"GIT_CONFIG_COUNT": "1",
+                                          "GIT_CONFIG_KEY_0": "core.autocrlf",
+                                          "GIT_CONFIG_VALUE_0": "false"})
+
+
+def setUpModule():
+    _SANS_CRLF.start()
+
+
+def tearDownModule():
+    _SANS_CRLF.stop()
+
+
 class Essais(unittest.TestCase):
 
     def bac(self, nom):

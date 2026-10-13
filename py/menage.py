@@ -99,7 +99,17 @@ def _p(s=""):
 # ── chemins : la sémantique de `std::path` ──────────────────────────────────
 
 def _composants(p):
-    return p.startswith("/"), [c for c in p.split("/") if c not in ("", ".")]
+    """(racine, composants) — la racine est "" (relatif), "/" ou, sous Windows,
+    le lecteur ("C:/"). Sous Windows `\\` vaut `/` : sans cela un chemin entier
+    n'est qu'UN composant, et rien n'est jamais « sous » le projet (mesuré par
+    la CI Windows : ménage aveugle, migration refusée)."""
+    if os.name == "nt":
+        p = p.replace("\\", "/")
+        if p.startswith("//?/"):
+            p = p[4:]
+        if len(p) >= 2 and p[1] == ":" and p[0].isalpha():
+            return p[0].upper() + ":/", [c for c in p[2:].split("/") if c not in ("", ".")]
+    return ("/" if p.startswith("/") else ""), [c for c in p.split("/") if c not in ("", ".")]
 
 
 def strip_prefix(p, base):
@@ -263,7 +273,7 @@ def relatif(projet, p):
     if r is not None:
         return r
     rp, cp = _composants(p)
-    return "/".join((["/"] if rp else []) + cp)
+    return rp + "/".join(cp)
 
 
 def gauche(s, n):
