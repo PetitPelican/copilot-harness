@@ -216,60 +216,14 @@ def recidive(quoi, jours):
     return n
 
 
-def memoire_auto(racine):
-    """Le dossier de mémoire auto du projet, ou None. La clé est le CHEMIN."""
-    return socle.memoire_auto(racine)
-
-
 def resultat(mult):
-    """LE FIL QUI MANQUAIT : un résultat retombe sur ce qui a servi à l'obtenir.
-
-    Repris à sense-lab, dont c'est le mécanisme central. LE POIDS CAUSAL EST LE
-    VIDAGE : on n'applique qu'aux notes lues DEPUIS LE DERNIER VERDICT, et on
-    efface la liste après. Sans ça, une note ouverte il y a trois jours serait
-    punie pour un échec d'aujourd'hui, et la première semaine d'usage ferait
-    chuter la mémoire entière."""
-    _, session, racine = ctx()
-    mem = memoire_auto(racine)
-    if mem is None:
-        return 0
-    f = os.path.join(mem, ".usage.json")
-    if os.path.exists(f):
-        d = _json_objet(lis(f))
-        if d is None:
-            return 0
-    else:
-        d = {}
-    enc = d.get("_encours")
-    brut = enc.get(session) if isinstance(enc, dict) else None
-    lot = [x for x in brut if isinstance(x, str)] if isinstance(brut, list) else []
-    if not lot:
-        return 0
-    import nature
-    niveau_note = _re(r"^> \*\*(mesuré|observé|supposé|dit|lu)\*\*", "m")
-    for nom in lot:
-        e = d.get(nom)
-        if not isinstance(e, dict):
-            continue
-        if "conf" not in e:
-            t = lis(os.path.join(mem, nom + ".md"))[:900]
-            m = niveau_note.search(t)
-            e["conf"] = nature.depart(m.group(1) if m else "", nature.Maison.MemoireAuto)
-        c = e["conf"]
-        c = (c * mult) if (isinstance(c, (int, float)) and not isinstance(c, bool)) else 0.0
-        try:
-            c = float("%.1f" % c)            # round() de Python
-        except (ValueError, OverflowError):
-            pass
-        e["conf"] = 100 if c > 100.0 else (1 if c < 1.0 else c)
-        r = e.get("res")
-        r = r if (isinstance(r, int) and not isinstance(r, bool)) else 0
-        e["res"] = r + 1
-    # LE VIDAGE : c'est lui qui fait la cause.
-    if isinstance(d.get("_encours"), dict):
-        d["_encours"].pop(session, None)
-    socle.ecrire_json(f, d)
-    return len(lot)
+    """UN RÉSULTAT RETOMBE SUR CE QUI A SERVI À L'OBTENIR : les sections de faits
+    lues dans cette session depuis le dernier verdict (`brain/poids.json`, voir
+    `poids`). LE POIDS CAUSAL EST LE VIDAGE : on n'applique qu'à ce qui a été lu
+    DEPUIS LE DERNIER VERDICT, et on efface la liste après."""
+    import poids
+    _, session, _ = ctx()
+    return poids.resultat(socle.socle(), session, mult)
 
 
 def _json_objet(texte):
@@ -285,11 +239,73 @@ def _refuse_constante(c):
     raise ValueError(c)
 
 
+# LES SEULES GARDES QUI RENVOIENT L'AGENT AU TRAVAIL (harnais Copilot 1.3.0).
+# Sous Copilot, l'app affiche la raison d'un renvoi comme un message de
+# l'UTILISATEUR : les gardes de forme (constats rejouables et tombés, forme des
+# questions, liste des rechutes, acharnement sur la cible, relecteur, `!cible`)
+# y produisaient de faux messages sans rien apporter au suivi. Leur code reste,
+# derrière cette liste ; en ajouter une la réarme. Gardées : le todo à jour après
+# du code (B1), le carnet d'équipe (B5), les faits (B6), les questions à poser
+# (B13), leur ligne Notion (B14, canal Notion seul) — plus, venues du harnais
+# Claude, la synchronisation (B15, si `HARNAIS_SYNCHRO`) et les faits d'un expert
+# (B16, si `HARNAIS_PROFIL=expert`).
+GARDES_ACTIVES = (
+    "B1-code-sans-todo", "B5-carnet", "B6-faits", "B13-poser", "B14-notion",
+    "B15-synchro", "B16-faits", "B16-local",
+)
+
+
+def active(quoi):
+    return quoi in GARDES_ACTIVES
+
+
+_LIBELLES = {
+    "B1-code-sans-todo": "du code a changé sans que la liste de tâches du projet soit mise à jour",
+    "B4-cible": "@user a fait une demande marquée !cible, pas encore close",
+    "B5-carnet": "du code a été commité dans une zone partagée sans note au carnet d'équipe",
+    "B6-faits": "les fichiers de faits du projet ont été modifiés",
+    "B7-constat-sans-rejeu": "des constats de la liste n'ont aucun moyen d'être revérifiés",
+    "B8-forme": "des lignes destinées à @user sont écrites comme des constats, pas comme des questions fermées",
+    "B9-tombe": "des constats ne sont plus vrais d'après leur propre vérification",
+    "B10-rechutes": "des points vont partir chez @user : la liste des erreurs déjà vues doit être rejouée avant",
+    "B11-acharnement": "la cible du projet n'avance pas malgré plusieurs mesures",
+    "B12-contredit": "un relecteur indépendant contredit des affirmations de l'agent",
+    "B13-poser": "des questions nouvelles attendent @user et le message de fin de tour ne les pose pas",
+    "B14-notion": "des questions pour @user n'ont pas leur ligne dans la base Notion du projet",
+    "B15-synchro": "le dépôt partagé avec l'autre poste ne se synchronise plus",
+    "B16-faits": "@user a donné des faits à cet agent expert, et ils ne sont pas notés dans ses fiches",
+    "B16-local": "des données qui identifient quelqu'un sont écrites hors du registre local",
+}
+
+
+def libelle(quoi):
+    """Ce que dit une garde, en clair : la phrase que lit quelqu'un qui ne connaît
+    pas le harnais. Une garde absente de cette liste n'est jamais muette : elle
+    retombe sur la formule générale."""
+    return _LIBELLES.get(quoi or "", "règle de tenue du projet")
+
+
+def entete(quoi):
+    """LA SIGNATURE. Quand une garde renvoie l'agent au travail, l'app affiche sa
+    raison comme un message de l'utilisateur. Sans ce rappel, @user croit avoir
+    écrit une consigne qu'il ne reconnaît pas, et personne ne sait d'où elle vient."""
+    code = " « %s »" % quoi if quoi else ""
+    return ("[Harnais — rappel automatique. Ce message n'a pas été écrit par @user.]\n"
+            "Le harnais est le plugin installé dans l'atelier : à chaque fin de tour, une garde "
+            "vérifie que le projet est tenu à jour, et renvoie l'agent au travail quand ce n'est "
+            "pas le cas.\n"
+            "Garde déclenchée%s : %s.\n"
+            "@user n'a rien à faire : l'agent corrige seul.\n\n" % (code, libelle(quoi)))
+
+
 # L'unique canal de sortie — et donc le seul point où tracer un blocage, et le
 # seul où l'on peut voir qu'il revient. (Les textes des renvois sont en bas du
-# fichier : ils sont longs, et ils sont comparés à l'octet aux témoins.)
+# fichier : ils sont longs.)
 
 def sortie(code, message=None, quoi=None, detail=""):
+    """COPILOT : un renvoi (code 2) part sur la sortie standard en
+    `{"decision":"block","reason":…}`, et le programme sort en 0 — un code non
+    nul n'est qu'une panne de hook (voir `hote`)."""
     if code == 2:
         if quoi is not None:
             vues = recidive(quoi, 7)           # AVANT d'écrire la ligne de ce tour
@@ -304,11 +320,12 @@ def sortie(code, message=None, quoi=None, detail=""):
             # qui mord une fois a fait son travail.
             if message is not None and vues + 1 >= RECIDIVE:
                 message += RECIDIVE_MSG.format(vues + 1)
-    # NE RECOPIE PAS (27/09/2026). Chaque renvoi faisait réécrire à l'agent tout
-    # son message, que le commanditaire avait déjà lu : il voyait la même
-    # conclusion quatre, cinq fois.
-    if code == 2 and message is not None:
-        message += PIED_RENVOI
+        # NE RECOPIE PAS. Chaque renvoi faisait réécrire à l'agent tout son
+        # message, que @user avait déjà lu.
+        if message is not None:
+            message = entete(quoi) + message + PIED_RENVOI
+        import hote
+        hote.renvoie(message or "")
     if message is not None:
         try:
             sys.stderr.write(message)
@@ -319,14 +336,11 @@ def sortie(code, message=None, quoi=None, detail=""):
 
 
 def enveloppe_note(note):
-    """L'ENVELOPPE QUI PARLE À CODE DE SORTIE 0. Mesuré le 12/09/2026 sur Claude
-    Code 2.1.269, sonde jetable et témoins négatifs : quand une fin de tour rend
-    0, ni la sortie standard brute ni l'erreur standard n'arrivent nulle part —
-    le tour se termine, le message est perdu. Seul un objet JSON portant
-    `systemMessage` devient une note pour Maxime dans son terminal, et il
-    n'atteint PAS le modèle : rien n'est relancé, aucun jeton n'est dépensé."""
+    """L'ENVELOPPE QUI PARLE À CODE DE SORTIE 0 : une note pour @user, qui ne
+    relance pas l'agent. Seul un objet JSON est lu. Que Copilot CLI affiche
+    `systemMessage` en fin de tour : NON MESURÉ."""
     import json
-    return json.dumps({"systemMessage": note}, ensure_ascii=False, separators=(",", ":"))
+    return json.dumps({"systemMessage": note}, separators=(",", ":"))
 
 
 def dit_sans_bloquer(note):
@@ -1053,6 +1067,9 @@ def nom_agent(racine):
             rel = a[len(b):]
             if len(rel) == 2 and rel[0] == "agents":
                 return rel[1]
+            # COPILOT, forme compacte : le harnais se place dans `brain/mind/<nom>`.
+            if len(rel) == 3 and rel[0] == "brain" and rel[1] == "mind":
+                return rel[2]
     comp = _composants(p)
     return comp[-1] if comp and comp[-1] != ".." else ""
 
@@ -1226,59 +1243,62 @@ def lien_notion(texte):
     return _re(r"notion\.(?:so|site|com)/\S*?[0-9a-f]{32}", "i").search(texte) is not None
 
 
-def dernier_message(data):
-    """Le texte que l'agent a écrit depuis le dernier message qui n'est pas de lui
-    — ce qu'il s'apprête à rendre. Claude Code le donne parfois directement ;
-    sinon on le lit à la fin du journal de session (la fin seulement : ces
-    journaux font des dizaines de Mo). Illisible → vide, et la garde demande."""
+MARQUE_RENVOI = "@user a DÉJÀ lu ton message"
+
+
+def lecture_du_tour(data):
+    """LE JOURNAL DE SESSION DE COPILOT CLI (`events.jsonl`) : un événement par
+    ligne, le texte dans `data.content`. On n'en lit que la fin — ces journaux
+    font des dizaines de Mo. Rend le texte écrit par l'agent depuis le dernier
+    message de l'utilisateur, et si ce message était un renvoi du harnais.
+
+    UN RENVOI N'OUVRE PAS UN NOUVEAU TOUR : remettre à zéro dessus faisait
+    oublier ce que l'agent venait de poser — et le forçait à tout recopier."""
     import json
-    d = data.get("last_assistant_message")
-    direct = d if isinstance(d, str) else ""
     chemin = data.get("transcript_path")
     if not isinstance(chemin, str) or not chemin:
-        return direct
+        return "", False
     try:
         with open(chemin, "rb") as f:
             taille = os.fstat(f.fileno()).st_size
             f.seek(max(0, taille - 3000000))
             brut = f.read()
     except (OSError, ValueError):
-        return direct
-    texte = brut.decode("utf-8", "replace")
+        return "", False
     morceaux = []
-    for l in lignes(texte):
+    renvoi = False
+    for l in lignes(brut.decode("utf-8", "replace")):
         try:
-            e = json.loads(l, parse_constant=_refuse_constante)
-        except Exception:
+            e = json.loads(l)
+        except ValueError:
             continue
         if not isinstance(e, dict):
             continue
-        m = e.get("message")
-        contenu = m.get("content") if isinstance(m, dict) else None
-        t = e.get("type")
-        if t == "assistant":
-            if isinstance(contenu, list):
-                for x in contenu:
-                    if isinstance(x, dict) and x.get("type") == "text":
-                        s = x.get("text")
-                        if isinstance(s, str):
-                            morceaux.append(s)
-        elif t == "user":
-            resultat_ = isinstance(contenu, list) and all(
-                isinstance(x, dict) and x.get("type") == "tool_result" for x in contenu)
-            # UN RENVOI DE FIN DE TOUR N'OUVRE PAS UN NOUVEAU TOUR (27/09/2026).
-            # Il est marqué `isMeta`. Remettre à zéro dessus faisait oublier ce
-            # que l'agent venait de poser — et le forçait à tout recopier.
-            meta = e.get("isMeta") is True
-            if not resultat_ and not meta:
+        d = e.get("data")
+        contenu = d.get("content") if isinstance(d, dict) else None
+        contenu = contenu if isinstance(contenu, str) else ""
+        ty = e.get("type")
+        if ty == "assistant.message":
+            if contenu.strip():
+                morceaux.append(contenu)
+        elif ty == "user.message":
+            renvoi = MARQUE_RENVOI in contenu
+            if not renvoi:
                 morceaux = []
-    # Ce que Claude Code donne directement est le DERNIER message ; le journal,
-    # tout le tour. Les deux : le dernier n'y est pas toujours encore écrit.
-    m = data.get("last_assistant_message")
-    if isinstance(m, str):
-        if not (morceaux and morceaux[-1] == m):
-            morceaux.append(m)
-    return "\n".join(morceaux)
+    return "\n".join(morceaux), renvoi
+
+
+def dernier_message(data):
+    """Le texte que l'agent a écrit depuis le dernier message de l'utilisateur —
+    ce qu'il s'apprête à rendre. Illisible → vide, et la garde demande."""
+    return lecture_du_tour(data)[0]
+
+
+def repart_sur_un_renvoi(data):
+    """L'agent repart-il sur un renvoi de fin de tour ? Copilot ne le dit pas dans
+    la charge : le renvoi revient au journal comme un message de l'utilisateur,
+    reconnaissable à son pied, que chaque renvoi porte."""
+    return lecture_du_tour(data)[1]
 
 
 def mots_porteurs(s):
@@ -1408,13 +1428,10 @@ def main(entree):
     # son parent.
     if "agent_type" in data or "agent_id" in data:
         sortie(0)
-    # UNE SESSION NON INTERACTIVE N'EST PAS L'AGENT (11/09/2026). Lancée dans
-    # son dossier — sonde « réponds OK », juge du relecteur, ouvrier `-p` —
-    # elle en a tous les droits, et ce hook la traitait comme lui : le 10/09 à
-    # 23 h 54 il a renvoyé une sonde au travail, qui a réécrit le todo et, avec
-    # deux juges, dupliqué des rappels. Mesuré : `sdk-cli` en `-p`, `cli` en
-    # session normale. HARNAIS_JUGE : posé par le relecteur, au cas où.
-    if os.environ.get("CLAUDE_CODE_ENTRYPOINT") == "sdk-cli" or "HARNAIS_JUGE" in os.environ:
+    # UNE SESSION DU JUGE N'EST PAS L'AGENT. Lancée dans son dossier, elle en a
+    # tous les droits, et ce hook la traitait comme lui : il renvoyait une sonde
+    # au travail, qui réécrivait le todo. Le relecteur pose HARNAIS_JUGE.
+    if "HARNAIS_JUGE" in os.environ:
         sortie(0)
     import memoire
     ici = memoire.depart_defaut()
@@ -1473,14 +1490,26 @@ def main(entree):
                 if os.path.exists(p):
                     code.append(p)
     mkdirs(ed)
-    # UN SEUL RENVOI DE FORME PAR FIN DE TOUR (27/09/2026). Claude Code dit
-    # `stop_hook_active` quand l'agent repart déjà sur un renvoi de fin de tour.
-    # Les gardes de FORME (B8, B10, B13) ne renvoient alors plus : enchaînées,
-    # elles faisaient réécrire quatre fois la même conclusion à Splide PO — 19
-    # tours en chaîne sur la flotte en une semaine. Les gardes d'ÉTAT (todo,
-    # carnet, faits, réponses du commanditaire) renvoient toujours : elles se
-    # satisfont en travaillant, pas en réécrivant.
-    deja_renvoye = data.get("stop_hook_active") is True
+    # UN SEUL RENVOI DE FORME PAR FIN DE TOUR. Quand l'agent repart déjà sur un
+    # renvoi de fin de tour — Copilot ne le dit pas dans la charge : on le lit au
+    # journal de session, au pied que porte chaque renvoi — les gardes de FORME
+    # (B8, B10, B13) ne renvoient plus : enchaînées, elles faisaient réécrire
+    # plusieurs fois la même conclusion. Les gardes d'ÉTAT (todo, carnet, faits)
+    # renvoient toujours : elles se satisfont en travaillant, pas en réécrivant.
+    # Copilot arrête l'agent après HUIT blocages consécutifs : chaque garde est
+    # aussi bornée par un témoin de l'état qui l'a déclenchée.
+    deja_renvoye = repart_sur_un_renvoi(data)
+    # L'ACCUEIL DU CTO N'EST PAS UN PROJET EN COURS. Tant que son registre est
+    # vide, ses questions sont du cadrage (« nouveau ou existant ? ») : exiger
+    # conséquences, critère « fini quand » et relecture des rechutes n'y produit
+    # que des messages bureaucratiques. Les gardes de FORME s'y taisent, comme
+    # après un renvoi ; les gardes d'ÉTAT restent armées.
+    import atelier
+    try:
+        accueil = atelier.accueil(racine) is not None
+    except atelier.RegistreInvalide:
+        accueil = False
+    forme_muette = deja_renvoye or accueil
     # LE CANAL NOTION (30/09/2026, Maxime pour Splide : « on va supprimer la
     # partie où toute la team splide mettait des notes dans mes rappels,
     # mainteant on va tout faire sur notion »). Posé par projet, dans les
@@ -1513,7 +1542,7 @@ def main(entree):
     # La même garde que la précédente, seconde source : la conversation. Elle ne
     # dépend pas des Rappels, donc elle tient aussi là où ils n'existent pas.
     f = os.path.join(ed, slug(agent) + ".cibles")
-    r = cibles_a_rappeler(f, lis(todo))
+    r = cibles_a_rappeler(f, lis(todo)) if active("B4-cible") else []
     if r:
         liste = "\n".join(
             ("  ✗ « %s » (%s) — retirée du todo SANS être cochée" % (court, rep)) if etat == "disparue"
@@ -1615,30 +1644,7 @@ def main(entree):
             else:
                 sortie(2, texte, quoi, detail)
 
-    # --- 1 septies. B17 — UNE COMMANDE À TAPER, POUR QUELQU'UN QUI N'A PAS DE TERMINAL
-    # AVANT la sortie anticipée « le todo n'a pas bougé » : ce que Maxime lit dans le
-    # message final n'a rien à voir avec l'état du todo, et la règle doit tenir à
-    # CHAQUE tour (trouvé par un sabotage : au 2e tour d'une session, la garde ne
-    # voyait plus rien).
-    # Une seule fois, sans boucle : `stop_hook_active` dit que ce tour est déjà
-    # le renvoi de la garde, et on laisse alors passer.
-    if not deja_renvoye:
-        a_taper = commandes_a_taper(dernier_message(data))
-        if a_taper:
-            liste = "\n".join("  ✗ %s" % t for t in a_taper[:3])
-            sortie(2, MSG_B17.format(liste), "B17-commande", str(len(a_taper)))
-    # LE MÊME ENDROIT RAPPELLE QUE LE MODE AUTO A REFUSÉ UN GESTE : le hook de
-    # refus l'a noté (il ne peut pas parler à l'agent, voir `refus_auto`). Le
-    # rappel ne part que si le message ne dit pas déjà « mode edit », et le
-    # fichier est consommé : une seule fois.
-    import refus_auto
-    refus = refus_auto.lis_et_consomme(ed, session)
-    if refus is not None and not deja_renvoye:
-        if "mode edit" not in dernier_message(data).lower():
-            sortie(2, MSG_B17_REFUS.format(refus.get("outil", "?"), refus.get("raison", "")),
-                   "B17-refus-auto", str(refus.get("outil", "?")))
-
-    # --- 2. composer ce qui attend Maxime ----------------------------------
+    # --- 2. composer ce qui attend @user ----------------------------------
     # Mesuré : trop pour être payé à chaque tour, d'où la garde sur la date du
     # todo.
     empreinte = "%.0f" % mtime(todo)
@@ -1672,7 +1678,7 @@ def main(entree):
         return specs[i] if i < len(specs) else None
 
     manquants = [t for t in attente if spec_de(t.i) is not None and spec_de(t.i).sans]
-    if manquants:
+    if active("B7-constat-sans-rejeu") and manquants:
         sig = sha16("constat|%s|%d" % (empreinte, len(manquants)))
         temoin = os.path.join(ed, session + ".constat")
         if lis(temoin).strip() != sig:
@@ -1690,8 +1696,10 @@ def main(entree):
     tombes = []
     restant = min(CONSTAT_BUDGET, reste_s() - 10.0)
     jour = maintenant("%d/%m")
+    # B9 DÉSARMÉE (Copilot) : les constats ne sont même pas rejoués.
     indices = [n for n, x in enumerate(attente)
-               if spec_de(x.i) is not None and not spec_de(x.i).sans][:CONSTAT_MAX]
+               if spec_de(x.i) is not None and not spec_de(x.i).sans
+               and active("B9-tombe")][:CONSTAT_MAX]
     for n in indices:
         import nature
         t0 = time.monotonic()
@@ -1753,7 +1761,7 @@ def main(entree):
     # le bloc : un projet sans cible et un projet dont la cible n'a pas été
     # lue doivent se distinguer dans la sortie.
     d_f = d_fact if d_fact is not None else os.path.join(racine, contexte()[0], ".fact")
-    phrase, specs_cible = consigne(d_f)
+    phrase, specs_cible = consigne(d_f) if active("B11-acharnement") else (None, [])
     if phrase is not None:
         f_cible = os.path.join(ed, slug(agent) + ".cible")
         # UNE CIBLE SANS MESURE N'EST PAS UNE CIBLE NON MESURÉE. Les deux
@@ -1852,7 +1860,7 @@ def main(entree):
             if v is not None:
                 deja[h] = v
         ecrit(vus_f, "\n".join("%s %d" % (h, n) for h, n in sorted(deja.items(), key=lambda a: a[0])))
-        if n_mauvais > 0 and not deja_renvoye:
+        if active("B8-forme") and n_mauvais > 0 and not forme_muette:
             sortie(2, MSG_B8.format(n_mauvais, ech), "B8-forme", str(n_mauvais))
 
     # --- 2 quater. LA LISTE DE CONTRÔLE, JOUÉE AVANT D'AFFIRMER -------------
@@ -1864,7 +1872,7 @@ def main(entree):
     # du code, des essais, une lecture — n'est JAMAIS interrompu : c'est la
     # condition pour qu'elle survive.
     liste = rechutes()
-    if liste and attente:
+    if active("B10-rechutes") and liste and attente:
         # DEUX TÉMOINS, DEUX DURÉES DE VIE, et les confondre était l'erreur. Ce
         # qui a DÉJÀ été contrôlé appartient à l'agent et survit aux sessions ;
         # le PLAFOND appartient à la session, sinon il se remplit une fois pour
@@ -1884,7 +1892,7 @@ def main(entree):
             # niveau de confiance, donc elle affirme.
             declenche = neufs > 0 or len(ecrites) > 0
             ecrit(f_rech, "\n".join(sorted(set(deja_l + h_neufs))))
-            if declenche and faits < RECHUTES_MAX and not deja_renvoye:
+            if declenche and faits < RECHUTES_MAX and not forme_muette:
                 ecrit(f_cpt, str(faits + 1))
                 n = neufs if neufs > 0 else len(ecrites)
                 sortie(2, MSG_B10.format(n, liste), "B10-rechutes", str(neufs))
@@ -1911,7 +1919,7 @@ def main(entree):
 
     # (a) LE VERDICT D'AVANT, S'IL CONTREDIT UNE LIGNE ENCORE OUVERTE.
     contredits = []
-    for p in liste_ext(".verdict"):
+    for p in (liste_ext(".verdict") if active("B12-contredit") else []):
         t = lis(p)
         verdict, sur = "", ""
         for l in lignes(t):
@@ -1944,7 +1952,7 @@ def main(entree):
     deja_r = lignes_temoin(vus_r)
     en_attente = len(liste_ext(".demande"))
     deposes = []
-    if en_attente < 20:          # le juge est borné ; la file d'attente aussi
+    if active("B12-contredit") and en_attente < 20 and not accueil:   # le juge est borné
         mkdirs(dep)
         for t in attente:
             # ON NE DÉPOSE QUE CE QUI AFFIRME QUELQUE CHOSE. Mesuré au premier
@@ -2047,7 +2055,7 @@ def main(entree):
             # quoi la mise à jour exigerait de reposer d'un coup tout l'arriéré.
             message = dernier_message(data)
             a_poser = [] if premiere else [t for t in neuves if not posee(message, t.titre)]
-            if a_poser and not deja_renvoye:
+            if a_poser and not forme_muette:
                 liste = "\n".join("  · %s" % t.titre for t in a_poser[:4])
                 reste = "\n  … et %d autre(s)." % (len(a_poser) - 4) if len(a_poser) > 4 else ""
                 sortie(2, MSG_B13.format(len(a_poser), liste, reste), "B13-poser", str(len(a_poser)))
@@ -2129,7 +2137,7 @@ PIED_RENVOI = (
     "\n"
     "\n"
     "— — —\n"
-    "Le commanditaire a DÉJÀ lu ton message : ne le recopie pas, ni tes conclusions, ni les questions que tu as déjà posées dans ce tour. Fais ce qui est demandé, puis termine par une ou deux lignes qui disent ce que tu as changé."
+    "@user a DÉJÀ lu ton message : ne le recopie pas, ni tes conclusions, ni les questions que tu as déjà posées dans ce tour. Fais ce qui est demandé, puis termine par une ou deux lignes qui disent ce que tu as changé."
 )
 
 RECIDIVE_MSG = (
@@ -2138,25 +2146,25 @@ RECIDIVE_MSG = (
     "— — —\n"
     "Cette garde t'a repris {} fois cette semaine. Un rappel qui revient n'est plus un rappel, c'est une règle manquante.\n"
     "\n"
-    "Avant de repartir, ouvre `~/.claude/rechutes.md` et écris UNE ligne : qu'aurait-il fallu vérifier avant ? Si une ligne dit déjà à peu près ça, CORRIGE-LA au lieu d'en ajouter une — la même leçon apprise deux fois est une seule règle. N'y mets jamais une panne d'environnement, ni une affirmation négative sur un outil.\n"
+    "Avant de repartir, ouvre `rechutes.md` dans le dossier d'état indiqué par `harnais diagnostic` et écris UNE ligne : qu'aurait-il fallu vérifier avant ? Si une ligne dit déjà à peu près ça, CORRIGE-LA au lieu d'en ajouter une — la même leçon apprise deux fois est une seule règle. N'y mets jamais une panne d'environnement, ni une affirmation négative sur un outil.\n"
 )
 
 MSG_B1 = (
-    "attente : tu as modifié du code ({}) sans mettre `{ou_todo}` à jour. Ce fichier est ce que le commanditaire retrouve quand il n'est pas là. Ce n'est PAS un moyen de ne pas lui demander : il est souvent disponible, et une question rangée sans être posée dort des jours.\n"
+    "attente : tu as modifié du code ({}) sans mettre `{ou_todo}` à jour. Ce fichier est ce que @user retrouve quand il n'est pas là — il le lit souvent depuis son téléphone. Ce n'est PAS un moyen de ne pas lui demander : il est souvent disponible, et une question rangée sans être posée dort des jours.\n"
     "\n"
-    "Avant de rendre la main : coche ce que tu as fini, et écris ce qui l'attend, une entrée par blocage, dans cette forme exacte :\n"
+    "Avant de rendre la main : coche ce que tu as fini, et écris ce qui l'attend, une entrée par blocage, dans cette forme exacte (l'exemple est INVENTÉ et sans rapport avec ce projet : seule la forme compte) :\n"
     "\n"
-    "- [ ] !haut @user **J'autorise le paiement en ligne ? oui / non**\n"
-    "      oui → la boutique encaisse dès lundi ; il me faut ta signature, 20 min.\n"
-    "      non → on ouvre sans encaissement, les clients paient à la livraison.\n"
-    "      fini quand → tu ouvres la boutique et un paiement d'essai passe.\n"
+    "- [ ] !haut @user **J'archive les anciens rapports ? oui / non**\n"
+    "      oui → ils partent en archive demain ; tu pourras les rouvrir pendant 30 jours.\n"
+    "      non → ils restent où ils sont et le dossier continue de grossir.\n"
+    "      fini quand → tu ouvres le dossier et il ne reste que le mois en cours.\n"
     "      Ça attend depuis 4 jours ; j'ai continué sur le reste.\n"
     "\n"
-    "UNE QUESTION FERMÉE, JAMAIS UN CONSTAT. Un constat lui laisse tout le travail : comprendre ce qu'on lui demande, deviner comment répondre, et mesurer seul ce qu'il risque à ne pas répondre. Il doit trancher d'un mot, sans rien ouvrir.\n"
+    "UNE QUESTION FERMÉE, JAMAIS UN CONSTAT. Un constat lui laisse tout le travail : comprendre ce qu'on lui demande, deviner comment répondre, et mesurer seul ce qu'il risque à ne pas répondre. Il doit trancher d'un mot, depuis son téléphone, sans rien ouvrir.\n"
     "\n"
     "Sous la ligne, une ligne par réponse possible — ce qu'elle DÉCLENCHE, pas ce qu'elle signifie. Trois voies : numérote-les, il répond « 2 ». Et si tu ne sais pas quoi faire de l'une des réponses, la question n'est pas prête : elle n'a rien à faire dans sa liste.\n"
     "\n"
-    "Le commanditaire est CEO — PAS de nom de fichier, de fonction ni de variable d'environnement.\n"
+    "@user n'est pas forcément technique — PAS de nom de fichier, de fonction ni de variable d'environnement.\n"
     "\n"
     "ET POSE-LA : tout `@user` que tu écris ce tour-ci se pose AUSSI, en clair et sous sa forme fermée, dans ton message de fin de tour. Le todo est le filet pour quand il n'est pas là ; il ne remplace pas la question.\n"
     "\n"
@@ -2164,11 +2172,11 @@ MSG_B1 = (
 )
 
 MSG_B4 = (
-    "attente : Maxime t'a fait {} demande(s) marquée(s) !cible dans le fil, pas encore close(s).\n"
+    "attente : @user t'a fait {} demande(s) marquée(s) !cible dans le fil, pas encore close(s).\n"
     "\n"
     "{}\n"
     "\n"
-    "Traite-la ; si elle ne peut pas l'être maintenant, écris sous sa ligne dans `{ou_todo}` ce qui manque pour la finir. Coche-la quand c'est fait. Une ligne retirée sans être cochée : remets-la, ou dis à Maxime pourquoi tu la laisses. Je ne te la rappelle qu'une fois — ensuite elle vit dans ton todo, comme tes autres tâches."
+    "Traite-la ; si elle ne peut pas l'être maintenant, écris sous sa ligne dans `{ou_todo}` ce qui manque pour la finir. Coche-la quand c'est fait. Une ligne retirée sans être cochée : remets-la, ou dis à @user pourquoi tu la laisses. Je ne te la rappelle qu'une fois — ensuite elle vit dans ton todo, comme tes autres tâches."
 )
 
 MSG_B5 = (
@@ -2190,11 +2198,11 @@ MSG_B5 = (
 )
 
 MSG_B6 = (
-    "attente : tu as modifié les FAITS du projet ({}). Ce sont les seuls fichiers partagés par tous les agents, et ils ne s'écrivent qu'à la demande du commanditaire — un agent qui les réécrit depuis son lot efface le travail d'un autre en silence.\n"
+    "attente : tu as modifié les FAITS du projet ({}). Ce sont les seuls fichiers partagés par tous les agents, et ils ne s'écrivent qu'à la demande de @user — un agent qui les réécrit depuis son lot efface le travail d'un autre en silence.\n"
     "\n"
     "Ta mémoire est déportée : elle s'enregistre toute seule en fin de tour, MAIS jamais ces fichiers-là. Ils resteront donc en attente indéfiniment.\n"
     "\n"
-    "Si le commanditaire ne l'a pas demandé, annule-les. S'il l'a demandé, enregistre-les toi-même avec ` # fact-ok` dans le message — l'autorisation restera dans l'historique."
+    "Si @user ne l'a pas demandé, annule-les. S'il l'a demandé, enregistre-les toi-même avec ` # fact-ok` dans le message — l'autorisation restera dans l'historique."
 )
 
 MSG_B7 = (
@@ -2221,7 +2229,7 @@ MSG_B11 = (
     "ARRÊTE de represcrire. Deux gestes, dans cet ordre :\n"
     "\n"
     "1. Demande-toi si c'est la MESURE qui est fausse avant de conclure que le produit l'est. Une vérification qui rend toujours le même verdict est suspecte : de quelle source lit-elle sa réponse ?\n"
-    "2. Si la mesure tient, pose la question au commanditaire dans `{ou_todo}` — une question fermée, ce que chaque réponse déclenche, et la ligne `fini quand →`. C'est lui qui tranche entre changer d'approche, changer la cible, ou accepter l'écart.\n"
+    "2. Si la mesure tient, pose la question à @user dans `{ou_todo}` — une question fermée, ce que chaque réponse déclenche, et la ligne `fini quand →`. C'est lui qui tranche entre changer d'approche, changer la cible, ou accepter l'écart.\n"
     "\n"
     "Si tu ne conduis pas la campagne, tu n'as rien à prescrire : note-le et continue ton travail.\n"
     "\n"
@@ -2229,21 +2237,21 @@ MSG_B11 = (
 )
 
 MSG_B8 = (
-    "attente : {} ligne(s) qui attend(ent) le commanditaire sont écrites comme des CONSTATS, pas comme des questions : {}.\n"
+    "attente : {} ligne(s) qui attend(ent) @user sont écrites comme des CONSTATS, pas comme des questions : {}.\n"
     "\n"
-    "Un constat lui laisse tout le travail — comprendre ce qu'on lui demande, deviner comment répondre, mesurer seul ce qu'il risque à ne pas répondre. Il doit trancher d'un mot, sans rien ouvrir.\n"
+    "Un constat lui laisse tout le travail — comprendre ce qu'on lui demande, deviner comment répondre, mesurer seul ce qu'il risque à ne pas répondre. Il doit trancher d'un mot, depuis son téléphone, sans rien ouvrir.\n"
     "\n"
-    "Réécris chacune dans cette forme :\n"
+    "Réécris chacune dans cette forme (l'exemple est INVENTÉ et sans rapport avec ce projet : seule la forme compte) :\n"
     "\n"
-    "- [ ] !haut @user **J'autorise le paiement en ligne ? oui / non**\n"
-    "      oui → la boutique encaisse dès lundi ; il me faut ta signature, 20 min.\n"
-    "      non → on ouvre sans encaissement, les clients paient à la livraison.\n"
-    "      fini quand → tu ouvres la boutique et un paiement d'essai passe.\n"
+    "- [ ] !haut @user **J'archive les anciens rapports ? oui / non**\n"
+    "      oui → ils partent en archive demain ; tu pourras les rouvrir pendant 30 jours.\n"
+    "      non → ils restent où ils sont et le dossier continue de grossir.\n"
+    "      fini quand → tu ouvres le dossier et il ne reste que le mois en cours.\n"
     "      Ça attend depuis 4 jours ; j'ai continué sur le reste.\n"
     "\n"
     "Le libellé porte la question ET les réponses possibles. Dessous, une ligne par réponse : ce qu'elle DÉCLENCHE, pas ce qu'elle signifie. Trois voies : numérote-les, il répond « 2 ».\n"
     "\n"
-    "La dernière ligne est obligatoire : `fini quand → …`, ce que MAXIME doit voir pour considérer la chose réglée. Pas une commande, pas un `↻` : ce qu'il constate, lui, de son côté. Sans elle, il n'a que ta parole.\n"
+    "La dernière ligne est obligatoire : `fini quand → …`, ce que @user doit voir pour considérer la chose réglée. Pas une commande, pas un `↻` : ce qu'il constate, lui, de son côté. Sans elle, il n'a que ta parole.\n"
     "\n"
     "Et si tu ne sais pas quoi faire de l'une des réponses, la question n'est pas prête — elle n'a rien à faire dans sa liste.\n"
     "\n"
@@ -2253,7 +2261,7 @@ MSG_B8 = (
 )
 
 MSG_B10 = (
-    "attente : {} point(s) vont partir chez le commanditaire. Avant qu'ils partent, rejoue ceci — c'est la liste de nos erreurs qui reviennent, et elle t'a déjà repris :\n"
+    "attente : {} point(s) vont partir chez @user. Avant qu'ils partent, rejoue ceci — c'est la liste de nos erreurs qui reviennent, et elle t'a déjà repris :\n"
     "\n"
     "{}\n"
     "\n"
@@ -2271,7 +2279,7 @@ MSG_B12 = (
     "\n"
     "Il n'a pas raison d'office. Trois issues, et une seule est interdite :\n"
     "\n"
-    "1. Il a raison → corrige la ligne dans `{ou_todo}` avant qu'elle coûte une décision à Maxime.\n"
+    "1. Il a raison → corrige la ligne dans `{ou_todo}` avant qu'elle coûte une décision à @user.\n"
     "2. Il a tort parce que ta vérification mesure mal → corrige la VÉRIFICATION, c'est presque toujours l'instrument qui a tort.\n"
     "3. Il a tort et tu peux le montrer → écris pourquoi sous la ligne, en une phrase, et continue.\n"
     "\n"
@@ -2279,7 +2287,7 @@ MSG_B12 = (
 )
 
 MSG_B14 = (
-    "attente : {} question(s) pour le commanditaire n'ont pas leur ligne dans la base Décisions de Notion :\n"
+    "attente : {} question(s) pour @user n'ont pas leur ligne dans la base Décisions de Notion :\n"
     "\n"
     "{}\n"
     "\n"
@@ -2287,7 +2295,7 @@ MSG_B14 = (
     "\n"
     "      ↳ https://www.notion.so/…\n"
     "\n"
-    "Si Notion ne répond pas, dis-le dans ton message : au bout de {} renvois, je laisse finir et je le signale au commanditaire."
+    "Si Notion ne répond pas, dis-le dans ton message : au bout de {} renvois, je laisse finir et je le signale à @user."
 )
 
 MSG_NOTION_FIN = (
@@ -2305,29 +2313,11 @@ MSG_B9 = (
     "\n"
     "À toi de trancher : si le constat est bien caduc, coche-le ou retire la ligne. S'il tient encore, c'est ta VÉRIFICATION qui est fausse — corrige-la plutôt que le constat, et demande-toi d'abord de quelle source elle a lu sa réponse.\n"
     "\n"
-    "ET DANS LES DEUX CAS, TU AS AFFIRMÉ QUELQUE CHOSE DE FAUX : ou bien le constat, ou bien le contrôle. C'est le seul endroit de la chaîne où on le sait avec certitude. Écris UNE ligne dans `~/.claude/rechutes.md` : qu'aurait-il fallu vérifier avant ? Corrige une ligne existante si elle dit déjà à peu près ça — la même leçon apprise deux fois est une seule règle."
-)
-
-MSG_B17 = (
-    "attente : ton message demande à Maxime de taper une commande :\n"
-    "\n"
-    "{}\n"
-    "\n"
-    "Maxime n'a pas de terminal (app à distance) : demande-lui de répondre, d'approuver une demande de permission ou de changer de mode — jamais de taper. Si un geste qu'il a approuvé est refusé par le contrôleur du mode auto, demande-lui de passer du mode auto au mode edit, puis réessaie. Réécris ton message sans cette ligne.\n"
-    "\n"
-    "Je ne te le redemande pas une seconde fois : c'est un avertissement, pas un blocage permanent."
-)
-
-MSG_B17_REFUS = (
-    "attente : le contrôleur du mode auto a refusé un geste pendant ce tour ({} — {}).\n"
-    "\n"
-    "Si Maxime a approuvé ce geste, demande-lui de passer du mode auto au mode edit dans l'app, puis réessaie. Jamais de commande à lui faire taper : il n'a pas de terminal (app à distance). Ne contourne pas le refus par un autre chemin. Si le geste n'a pas été approuvé, dis-le-lui en clair.\n"
-    "\n"
-    "Je ne te le redemande pas une seconde fois : c'est un avertissement, pas un blocage permanent."
+    "ET DANS LES DEUX CAS, TU AS AFFIRMÉ QUELQUE CHOSE DE FAUX : ou bien le constat, ou bien le contrôle. C'est le seul endroit de la chaîne où on le sait avec certitude. Écris UNE ligne dans `rechutes.md` dans le dossier d'état indiqué par `harnais diagnostic` : qu'aurait-il fallu vérifier avant ? Corrige une ligne existante si elle dit déjà à peu près ça — la même leçon apprise deux fois est une seule règle."
 )
 
 MSG_B13 = (
-    "attente : {} question(s) NOUVELLE(S) attendent le commanditaire, et ton message ne les pose pas :\n"
+    "attente : {} question(s) NOUVELLE(S) attendent @user, et ton message ne les pose pas :\n"
     "\n"
     "{}{}\n"
     "\n"
@@ -2341,6 +2331,6 @@ MSG_MUET_LOCAL = (
 )
 
 MSG_CIBLE = (
-    "demande !cible de Maxime notée dans `{}` (repère « {} »). Elle est suivie : traite-la, et coche sa ligne quand c'est fait. Si elle ne peut pas l'être dans ce tour, écris sous elle ce qui manque — la fin de tour te la rappellera une fois."
+    "demande !cible de @user notée dans `{}` (repère « {} »). Elle est suivie : traite-la, et coche sa ligne quand c'est fait. Si elle ne peut pas l'être dans ce tour, écris sous elle ce qui manque — la fin de tour te la rappellera une fois."
 )
 

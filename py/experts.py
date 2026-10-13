@@ -1,19 +1,19 @@
 # -*- coding: utf-8 -*-
-"""LA GARDE DES FAITS DES AGENTS EXPERTS (B16) — ce que Maxime donne se note le jour même.
+"""LA GARDE DES FAITS DES AGENTS EXPERTS (B16) — ce que @user donne se note le jour même.
 
-Demandé par Maxime le 12/10/2026. Chez Legal, la règle « un fait donné se note
+Demandé par @user le 12/10/2026. Chez Legal, la règle « un fait donné se note
 dans les faits » n'était qu'écrite : associés, capital, banque, TVA sont restés
 QUATRE JOURS dans la seule conversation. Une règle qu'aucun mécanisme ne porte
 se lit comme tenue, parce que rien ne la contredit jamais.
 
 CE QUE LA GARDE FAIT. En fin de tour, pour un agent au profil expert
-(`HARNAIS_PROFIL=expert`) : si Maxime a écrit quelque chose de NEUF depuis le
+(`HARNAIS_PROFIL=expert`) : si @user a écrit quelque chose de NEUF depuis le
 dernier passage, un juge lit ses messages et les fiches de l'agent, et rend la
 liste des faits donnés. La fin de tour est refusée si l'un d'eux n'est noté
 nulle part, ou si un fait qui identifie quelqu'un est dans une fiche PARTAGÉE.
 
 POURQUOI UN JUGE ET PAS DES MOTS-CLÉS. Mesuré le 12/10/2026 sur les 86 messages
-de Maxime à Legal : un détecteur à chiffres, dates et noms propres en signale 47
+de @user à Legal : un détecteur à chiffres, dates et noms propres en signale 47
 — plus d'un sur deux — et en rate ; aucun indice ne sépare les tours où un fait a
 été noté des autres (31 des 71 tours sans écriture portent un nombre de quatre
 chiffres). Un garde qui renvoie au travail un tour sur deux sans raison apprend
@@ -38,14 +38,13 @@ prouve que l'agent a VRAIMENT noté, pas seulement promis.
 """
 import os
 
-MODELE = "claude-sonnet-5"
-DELAI_JUGE = 25            # s — la fin de tour est coupée à 40 s par Claude Code
-MAX_MESSAGE = 6000         # caractères par message de Maxime transmis au juge
+DELAI_JUGE = 25            # s — la fin de tour est coupée à 40 s (hooks/copilot.json)
+MAX_MESSAGE = 6000         # caractères par message de @user transmis au juge
 MAX_FICHES = 60000         # caractères de fiches transmis au juge
 MAX_LOCAL = 20000
 REGISTRE = os.path.join("local", "registre.md")
 
-# Ce qui n'est jamais un message de Maxime, même arrivé par la même porte.
+# Ce qui n'est jamais un message de @user, même arrivé par la même porte.
 _PREFIXES_HORS = ("<", "Stop hook feedback", "[Request interrupted", "Caveat:",
                   "This session is being continued")
 _TRIVIAUX = {"oui", "non", "ok", "go", "merci", "vas-y", "continue", "stop", "d'accord",
@@ -57,7 +56,7 @@ def actif():
     return socle.profil_expert()
 
 
-# ── les messages de Maxime ──────────────────────────────────────────────────
+# ── les messages de @user ──────────────────────────────────────────────────
 
 def _sans_balises(t):
     """Retire les blocs `<system-reminder>…</system-reminder>` qu'injecte l'outil."""
@@ -66,14 +65,19 @@ def _sans_balises(t):
 
 
 def messages_maxime(chemin, depuis):
-    """Les messages tapés par Maxime, après l'entrée `depuis` (uuid), dans la fin du
-    journal de session. Sans repère (ou repère hors de la fin lue) : le DERNIER
+    """Les messages tapés par @user, après l'entrée `depuis`, dans la fin du
+    journal de session de Copilot (`events.jsonl` : `user.message`, texte dans
+    `data.content`). Sans repère (ou repère hors de la fin lue) : le DERNIER
     seulement — une garde qu'on active ne juge pas tout l'historique d'un coup.
 
-    Rend [(uuid, texte)]. Ce qui n'est pas de lui est écarté : résultats d'outil,
-    renvois de fin de tour (`isMeta`), messages de pair et notifications (balisés),
-    commandes `/…`."""
+    Rend [(repère, texte)]. Le repère est l'`id` de l'événement quand le journal
+    en porte un, sinon une empreinte de la ligne (NON MESURÉ : la forme exacte des
+    identifiants d'événement de Copilot). Ce qui n'est pas de lui est écarté :
+    renvois de fin de tour (leur pied), messages de pair et notifications
+    (balisés), commandes `/…`."""
+    import hashlib
     import json
+    import attente
     if not isinstance(chemin, str) or not chemin:
         return []
     try:
@@ -89,24 +93,17 @@ def messages_maxime(chemin, depuis):
             e = json.loads(l)
         except ValueError:
             continue
-        if not isinstance(e, dict) or e.get("type") != "user" or e.get("isMeta") is True:
+        if not isinstance(e, dict) or e.get("type") != "user.message":
             continue
-        m = e.get("message")
-        c = m.get("content") if isinstance(m, dict) else None
-        if isinstance(c, str):
-            texte = c
-        elif isinstance(c, list):
-            if any(isinstance(x, dict) and x.get("type") == "tool_result" for x in c):
-                continue
-            texte = "\n".join(x.get("text", "") for x in c
-                              if isinstance(x, dict) and x.get("type") == "text"
-                              and isinstance(x.get("text"), str))
-        else:
+        d = e.get("data")
+        texte = d.get("content") if isinstance(d, dict) else None
+        if not isinstance(texte, str) or attente.MARQUE_RENVOI in texte:
             continue
         texte = _sans_balises(texte)
         if not texte or texte.startswith(_PREFIXES_HORS) or texte.startswith("/"):
             continue
-        u = e.get("uuid") if isinstance(e.get("uuid"), str) else ""
+        u = e.get("id") if isinstance(e.get("id"), str) else hashlib.sha1(
+            l.strip().encode("utf-8", "replace")).hexdigest()[:16]
         tous.append((u, texte))
     if depuis:
         for i, (u, _) in enumerate(tous):
@@ -186,11 +183,11 @@ def invite(messages, d_fact, registre):
     msgs = "\n\n".join("--- message ---\n%s" % t[:MAX_MESSAGE] for _, t in messages)
     return (
         "Tu es un greffier. Tu ne parles à personne : tu rends UN objet JSON, rien d'autre.\n\n"
-        "Maxime (le commanditaire) vient d'écrire à son agent expert les messages ci-dessous. "
+        "@user (le commanditaire) vient d'écrire à son agent expert les messages ci-dessous. "
         "Relève chaque FAIT DURABLE qu'il y DONNE sur le domaine de l'agent : la société, une "
         "personne, un contrat, un chiffre, une date, une décision arrêtée, un document reçu. "
         "N'en sont PAS : une question, une demande de travail, un avis, une hypothèse, ce qui ne "
-        "concerne que la conversation ou les outils, ce que Maxime dit de l'agent lui-même.\n\n"
+        "concerne que la conversation ou les outils, ce que @user dit de l'agent lui-même.\n\n"
         "Pour chaque fait donné, dis s'il est déjà noté dans les fiches de l'agent ou dans son "
         "registre local (même reformulé), et s'il IDENTIFIE quelqu'un : un numéro (identité, "
         "banque, sécurité sociale, téléphone, immatriculation personnelle), une adresse "
@@ -205,16 +202,6 @@ def invite(messages, d_fact, registre):
         'adresse>", "note": "partage" | "local" | "nulle-part", "identifiant": true | false}]}\n'
         'Aucun fait donné : {"faits": []}. Dans le doute sur « déjà noté », réponds "nulle-part".'
     )
-
-
-def _claude():
-    import shutil
-    h = os.environ.get("HOME") or os.environ.get("USERPROFILE")
-    if h:
-        p = os.path.join(h, ".local", "bin", "claude")
-        if os.path.isfile(p) and os.access(p, os.X_OK):
-            return p
-    return shutil.which("claude")
 
 
 def lis_verdict(texte):
@@ -259,8 +246,9 @@ def juge(texte_invite):
         if os.path.isfile(simule):
             simule = _lis(simule, 200000)
         return lis_verdict(simule)
-    claude = _claude()
-    if claude is None:
+    import copilot
+    exe = copilot.executable()
+    if exe is None:
         return None
     import socle
     ici = os.path.join(socle.socle(), "experts-juge")
@@ -269,15 +257,18 @@ def juge(texte_invite):
     except OSError:
         return None
     env = dict(os.environ)
-    env.pop("CLAUDE_CONFIG_DIR", None)       # le socle interdit de le poser
     env["HARNAIS_JUGE"] = "1"                 # ses propres hooks se taisent
+    # LE JUGE NE TOUCHE À RIEN : une passe (`-p`), sans outils, sans instructions
+    # du projet, sans serveurs MCP — comme le relecteur.
+    c = [exe, "-p", texte_invite, "--silent", "--no-custom-instructions",
+         "--disable-builtin-mcps", "--available-tools", "--no-ask-user",
+         "--no-auto-update", "--no-remote-export"]
+    modele = os.environ.get("HARNAIS_MODELE_JUGE", "").strip()
+    if modele:
+        c += ["--model", modele]
     try:
-        r = subprocess.run(
-            [claude, "-p", "--model", MODELE, "--disallowedTools",
-             "Bash", "Edit", "Write", "NotebookEdit", "Read", "Glob", "Grep",
-             "WebFetch", "WebSearch", "Task", "Agent"],
-            input=texte_invite.encode("utf-8"), cwd=ici, env=env,
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=DELAI_JUGE)
+        r = subprocess.run(c, stdin=subprocess.DEVNULL, cwd=ici, env=env,
+                           stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=DELAI_JUGE)
     except (OSError, subprocess.SubprocessError):
         return None
     if r.returncode != 0:
@@ -373,7 +364,7 @@ def garde(data, d_fact, ed, session, affiche):
                + ["!"] + sorted(x["fait"] for x in mal_ranges)))
     if etat.get("sig") == s:
         # Déjà renvoyé pour ce même état : une garde qui mord une fois a fait son
-        # travail. Si l'agent juge que ce n'est pas un fait, il l'a dit à Maxime.
+        # travail. Si l'agent juge que ce n'est pas un fait, il l'a dit à @user.
         etat["vu"] = dernier
         _ecris_etat(f, etat)
         return None
@@ -408,28 +399,28 @@ def rappel(ed, session_quelconque=None):
         pires = max(pires, _lis_etat(e).get("muet_total", 0))
     if pires >= 3:
         return ("garde des faits : le juge n'a pas répondu sur les %d derniers tours où "
-                "Maxime a écrit — ce qu'il a donné n'a PAS été vérifié. Note-le toi-même, "
+                "@user a écrit — ce qu'il a donné n'a PAS été vérifié. Note-le toi-même, "
                 "et dis-le-lui." % pires)
     return None
 
 
 MSG_FAITS = (
-    "attente : Maxime t'a donné des faits que tes fiches ne portent pas encore :\n\n"
+    "attente : @user t'a donné des faits que tes fiches ne portent pas encore :\n\n"
     "{liste}\n\n"
     "Un fait donné se note LE TOUR MÊME — une conversation s'oublie, une fiche reste. "
     "Écris-les dans la fiche de ton métier ({fiches}) : une ligne par fait, avec sa date "
-    "et sa source — **dit** (Maxime l'a dit), **lu** (dans un document), **supposé**.\n\n"
+    "et sa source — **dit** (@user l'a dit), **lu** (dans un document), **supposé**.\n\n"
     "Ce qui IDENTIFIE quelqu'un — numéros, adresses, état civil, montants payés — ne va "
     "jamais dans une fiche partagée : elle part avec le dépôt. Il va dans le registre "
     "local ({registre}), que le dépôt ignore.\n\n"
-    "Si l'un d'eux n'est pas un fait (une hypothèse, une question), dis-le à Maxime en "
+    "Si l'un d'eux n'est pas un fait (une hypothèse, une question), dis-le à @user en "
     "une phrase au lieu de l'écrire."
 )
 
 MSG_MAL_RANGES = (
     "ces faits IDENTIFIENT quelqu'un et sont dans une fiche partagée :\n\n{liste}\n\n"
     "Déplace-les dans le registre local ({registre}) et retire-les de la fiche — "
-    "l'historique du dépôt les garde : si le dépôt a déjà été envoyé, dis-le à Maxime."
+    "l'historique du dépôt les garde : si le dépôt a déjà été envoyé, dis-le à @user."
 )
 
 MSG_LOCAL = (
@@ -437,5 +428,5 @@ MSG_LOCAL = (
     "quelqu'un partirait avec lui — sur GitHub, et chez l'autre personne.\n\n"
     "Ajoute `{dossier}` au `.gitignore` du dépôt qui le contient ; s'il a déjà été "
     "enregistré, retire-le de l'index (`git rm --cached`) sans l'effacer, et dis-le à "
-    "Maxime."
+    "@user."
 )
