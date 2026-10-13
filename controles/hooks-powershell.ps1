@@ -38,6 +38,11 @@ function Invoke-Hook([string]$Shell, [string]$Command, [object]$Payload, [hashta
     $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($Command))
     $psi.Arguments = "-NoProfile -NonInteractive -EncodedCommand $enc"
     $psi.UseShellExecute = $false
+    # Un hote lance le hook DANS le dossier de la session : le garde de commit
+    # interroge git depuis la (comme le Rust). Sans cela, il juge le depot d'ou
+    # le controle est lance, et laisse tout passer.
+    $cwd = if ($Payload -isnot [string] -and $Payload.ContainsKey('cwd')) { $Payload.cwd } else { (Get-Location).Path }
+    $psi.WorkingDirectory = $cwd
     $psi.RedirectStandardInput = $true
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
