@@ -82,6 +82,14 @@ def inscrit(ds, v):
     return vue.Chemins([(d, v) for d in ds])
 
 
+def explique(d, h, ins):
+    """Ce qu'un « ok » manqué a vu : sans lui, la CI Windows ne dit que le verdict."""
+    return "%r · lancements %r · inscrits %r · copies %r" % (
+        vue.verdict(h), [(l.nom, l.declare, l.inscrit, l.inscrite, l.trace) for l in h.lancements],
+        [(c, vue._cle(vue.canon(c))) for c, _ in getattr(ins, "entrees", [])],
+        [(c, vue._cle(vue.canon(c))) for c in vue.copies(d)])
+
+
 def juge(d, ins):
     return vue.verdict(vue.harnais(d, ins))
 
@@ -243,7 +251,7 @@ class Essais(unittest.TestCase):
             ags.append(ag)
         ins = inscrit([ags[0], ags[1]], v)
         h = vue.harnais(d, ins)
-        self.assertEqual(vue.verdict(h)[0], "ok")
+        self.assertEqual(vue.verdict(h)[0], "ok", explique(d, h, ins))
         self.assertTrue("faits 5/5" in vue.jauge(h) and "état 4/4" in vue.jauge(h), vue.jauge(h))
         x, c = juge(d, inscrit([ags[0]], v))
         self.assertEqual(x, "non-inscrit")
@@ -272,7 +280,7 @@ class Essais(unittest.TestCase):
         h = vue.harnais(d, ins)
         self.assertEqual(len(h.lancements), 2)
         self.assertIn("état 4/4", vue.jauge(h))
-        self.assertEqual(vue.verdict(h)[0], "ok")
+        self.assertEqual(vue.verdict(h)[0], "ok", explique(d, h, ins))
         self.assertFalse(os.path.exists(os.path.join(d, "agents")))
         os.remove(agent.perimetre_compact(d, "QA"))
         self.assertEqual(juge(d, ins)[0], "sans-deny")
