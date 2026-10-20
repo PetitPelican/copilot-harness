@@ -14,13 +14,16 @@ import json
 import os
 import re
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _isole import Isole, git, ecris, lis  # noqa: E402
 import banc_equipe  # noqa: E402
+import demenage  # noqa: E402
 import memoire  # noqa: E402
+import migration  # noqa: E402
 import niveau  # noqa: E402
 from memoire import Forme  # noqa: E402
 
@@ -261,28 +264,119 @@ class DejaBrain(Base):
 
 
 class Reecriture(unittest.TestCase):
+    """Une racine du SYSTÈME (tempfile + os.path) : `/a` n'est pas un chemin absolu sous
+    Windows, où l'on n'a ni `/a` ni le même séparateur."""
+
+    def setUp(self):
+        self.a = os.path.abspath(os.path.join(tempfile.gettempdir(), "a"))
+        self.corr = [(os.path.join(self.a, "memoire"), os.path.join(self.a, "brain"))]
+
+    def lit(self, e, corr=None, multi=None):
+        """Le résultat, comparable d'un système à l'autre (casse et séparateurs du système)."""
+        ys, change = niveau.reecrit_entree(e, self.a, self.corr if corr is None else corr, multi)
+        return [os.path.normcase(os.path.normpath(y)) if os.path.isabs(y) else y for y in ys], change
+
+    def absolu(self, *parts):
+        return os.path.normcase(os.path.normpath(os.path.join(self.a, *parts)))
+
     def test_une_borne_avant_de_mordre(self):
-        corr = [("/a/memoire", "/a/brain")]
-        self.assertEqual(niveau.reecrit_entree("/a/memoire/x", "/a", corr), (["/a/brain/x"], True))
-        self.assertEqual(niveau.reecrit_entree("/a/memoire-old", "/a", corr), (["/a/memoire-old"], False))
-        self.assertEqual(niveau.reecrit_entree("memoire", "/a", corr), (["brain"], True))
-        self.assertEqual(niveau.reecrit_entree("memoire-old/x", "/a", corr), (["memoire-old/x"], False))
+        self.assertEqual(self.lit(os.path.join(self.a, "memoire", "x")), ([self.absolu("brain", "x")], True))
+        self.assertEqual(self.lit(os.path.join(self.a, "memoire-old")), ([self.absolu("memoire-old")], False))
+        self.assertEqual(self.lit("memoire"), (["brain"], True))
+        self.assertEqual(self.lit("memoire-old/x"), (["memoire-old/x"], False))
 
     def test_un_dossier_qui_se_separe_donne_ses_deux_adresses(self):
-        corr = [("/a/memoire", "/a/brain")]
-        multi = {"/a/memoire/agents/OPS": ["/a/brain/mind/OPS", "/a/brain/agents/OPS"]}
-        self.assertEqual(niveau.reecrit_entree("memoire/agents/OPS", "/a", corr, multi),
+        multi = {os.path.join(self.a, "memoire", "agents", "OPS"):
+                 [os.path.join(self.a, "brain", "mind", "OPS"), os.path.join(self.a, "brain", "agents", "OPS")]}
+        self.assertEqual(self.lit("memoire/agents/OPS", multi=multi),
                          (["brain/mind/OPS", "brain/agents/OPS"], True))
         # Un droit PLUS PROFOND n'est pas dédoublé : il n'a qu'une adresse d'arrivée.
-        self.assertEqual(niveau.reecrit_entree("memoire/agents/OPS/preuves", "/a", corr, multi),
+        self.assertEqual(self.lit("memoire/agents/OPS/preuves", multi=multi),
                          (["brain/agents/OPS/preuves"], True))
 
     def test_le_json_hors_deny_et_allow_n_est_pas_touche(self):
         t = json.dumps({"deny": ["memoire/x"], "note": "memoire/x", "allow": []})
-        neuf, n = niveau.reecrit_droits(t, "/a", [("/a/memoire", "/a/brain")])
+        neuf, n = niveau.reecrit_droits(t, self.a, self.corr)
         v = json.loads(neuf)
         self.assertEqual((n, v["deny"], v["note"]), (1, ["brain/x"], "memoire/x"))
-        self.assertEqual(niveau.reecrit_droits(t, "/a", [("/zz", "/yy")]), (t, 0))
+        zz = [(os.path.join(self.a, "zz"), os.path.join(self.a, "yy"))]
+        self.assertEqual(niveau.reecrit_droits(t, self.a, zz), (t, 0))
+
+
+class SortieGit(Base):
+    """Git for Windows (autocrlf=true) écrit « warning: … LF will be replaced by CRLF » sur sa
+    sortie d'ERREUR. Seule la sortie standard sert de verdict ; la sortie d'erreur ne sert
+    qu'à dire POURQUOI git a échoué — et sans ses avertissements, qui masquaient la raison."""
+
+    AVERTIS = ("warning: in the working copy of 'brain/fact/base.md', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'brain/mind/state.md', LF will be replaced by CRLF the next time Git touches it\n")
+
+    def faux_git(self, rc=0, out=b"", err=None):
+        err = self.AVERTIS.encode() if err is None else err
+        r = mock.Mock(returncode=rc, stdout=out, stderr=err)
+        return mock.patch("subprocess.run", return_value=r)
+
+    def test_un_avertissement_sur_la_sortie_d_erreur_n_est_pas_du_travail_non_enregistre(self):
+        with self.faux_git():
+            self.assertEqual(migration.git(self.maison, ["status", "--porcelain"]), (0, ""))
+            self.assertTrue(migration.propre(self.maison))
+            self.assertEqual(demenage.etat_git(self.maison)[2], [])
+
+    def test_une_modification_reelle_reste_vue_malgre_les_avertissements(self):
+        with self.faux_git(out=b" M brain/fact/base.md\n"):
+            self.assertEqual(migration.git(self.maison, ["status", "--porcelain"]), (0, "M brain/fact/base.md"))
+            self.assertFalse(migration.propre(self.maison))
+            self.assertEqual(demenage.etat_git(self.maison)[2], [" M brain/fact/base.md"])
+
+    def test_la_verification_d_avant_ne_bloque_pas_sur_un_avertissement(self):
+        a_deplacer = os.path.join(self.maison, "outputs")
+        os.makedirs(a_deplacer)
+        pl = niveau.Plan(self.maison)
+        pl.renommages.append((a_deplacer, os.path.join(self.maison, "assets"), ""))
+        with self.faux_git():
+            niveau._verifie_avant(pl, None)
+        self.assertEqual(pl.bloquants, [])
+        with self.faux_git(out=b" M outputs/x.md\n"):
+            niveau._verifie_avant(pl, None)
+        self.assertEqual(len(pl.bloquants), 1, "le témoin : une vraie modification bloque")
+
+    def test_la_raison_d_un_echec_n_est_pas_noyee_sous_les_avertissements(self):
+        err = (self.AVERTIS * 4 + "fatal: unable to auto-detect email address\n").encode()
+        with self.faux_git(rc=128, err=err):
+            rc, out = migration.git(self.maison, ["commit", "-q", "-m", "x"])
+        self.assertEqual(rc, 128)
+        self.assertIn("unable to auto-detect email address", out)
+        self.assertNotIn("warning:", out)
+        # Rien d'autre que des avertissements : on les rend, plutôt que de ne rien dire.
+        with self.faux_git(rc=1, err=self.AVERTIS.encode()):
+            self.assertIn("warning:", migration.git(self.maison, ["commit"])[1])
+
+    def test_un_depot_sans_identite_et_des_avertissements_se_met_quand_meme_a_niveau(self):
+        """Le cas d'un PC neuf sous Windows : pas d'identité git, autocrlf=true. Ce poste-ci
+        est mis dans le même état, quel que soit le système."""
+        p = self.depot("Neuf")
+        ecris(os.path.join(p, "brain", "fact", "base.md"), "---\ncap: x\n---\n")
+        ecris(os.path.join(p, "brain", "mind", "state.md"), ETAT)
+        ecris(os.path.join(p, "brain", "mind", "todo.md"), "- [ ] t\n")
+        ecris(os.path.join(p, "outputs", "OPS", "note.md"), "un plan\n")
+        self.valide(p)
+        env = {"GIT_CONFIG_COUNT": "2",
+               "GIT_CONFIG_KEY_0": "core.autocrlf", "GIT_CONFIG_VALUE_0": "true",
+               "GIT_CONFIG_KEY_1": "user.useConfigOnly", "GIT_CONFIG_VALUE_1": "true"}
+        with mock.patch.dict(os.environ, env):
+            for k in ("GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL", "EMAIL"):
+                os.environ.pop(k, None)
+            self.assertNotEqual(migration.git(p, ["var", "GIT_COMMITTER_IDENT"])[0], 0, "le banc a une identité")
+            rc, out = lance([p, "--apply", "--agents-arretes"])
+            self.assertEqual(rc, 0, out)
+            self.assertTrue(os.path.isdir(os.path.join(p, "assets", "OPS")))
+            self.assertEqual(migration.git(p, ["status", "--porcelain", "--", "assets"])[1], "")
+
+    def test_une_identite_configuree_n_est_jamais_remplacee(self):
+        p = self.depot("Identite")
+        env = {"GIT_AUTHOR_NAME": "Une Personne", "GIT_AUTHOR_EMAIL": "p@exemple.test",
+               "GIT_COMMITTER_NAME": "Une Personne", "GIT_COMMITTER_EMAIL": "p@exemple.test"}
+        with mock.patch.dict(os.environ, env):
+            self.assertEqual(migration.identite_de_commit(p), [])
 
 
 class Windows(unittest.TestCase):
@@ -325,8 +419,14 @@ class Windows(unittest.TestCase):
                                                [("C:\\Users\\u\\Proj\\memoire", "C:\\Users\\u\\Proj\\brain")]),
                          (["\\x\\memoire"], False))
 
+    @unittest.skipIf(os.name == "nt", "propre aux systèmes où la casse distingue deux dossiers : "
+                                      "sous Windows, `A` et `a` sont le même")
     def test_la_casse_compte_hors_windows(self):
-        self.assertEqual(niveau.reecrit_entree("/A/MEMOIRE/x", "/a", [("/a/memoire", "/a/brain")])[1], False)
+        a = os.path.abspath(os.path.join(tempfile.gettempdir(), "a"))
+        corr = [(os.path.join(a, "memoire"), os.path.join(a, "brain"))]
+        autre_casse = os.path.join(a.upper(), "MEMOIRE", "x")
+        self.assertEqual(niveau.reecrit_entree(autre_casse, a, corr)[1], False)
+        self.assertEqual(niveau.reecrit_entree(os.path.join(a, "memoire", "x"), a, corr)[1], True)
 
 
 class Livrables(Base):

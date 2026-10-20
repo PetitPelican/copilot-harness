@@ -639,6 +639,8 @@ class Windows(unittest.TestCase):
         # un chemin hors du projet reste tel quel
         self.assertEqual(t("D:\\ailleurs\\x", "PO", pl)[0], ["D:\\ailleurs\\x"])
 
+    @unittest.skipIf(os.name == "nt", "propre aux systèmes où la casse distingue deux dossiers : "
+                                      "sous Windows, `BRAIN` et `brain` sont le même dossier")
     def test_les_memes_droits_hors_windows_gardent_la_casse(self):
         pl = demenage.Plan("/Users/u/Projet")
         pl.agents, pl.premier, pl.badge = ["OPS", "PO"], "OPS", {"OPS": "/Users/u/Projet", "PO": "/Users/u/Projet"}
