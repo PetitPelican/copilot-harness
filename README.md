@@ -263,6 +263,59 @@ Un `CLAUDE.md` existant est aussi lu par Copilot : ne pas ajouter
 un `AGENTS.md` contradictoire. Une mémoire ancienne `.fact`/`.mind`
 doit être migrée avec `brain-migre` avant de compléter `brain`.
 
+## Amener un projet existant à la forme actuelle
+
+Deux outils, à blanc par défaut : ils disent tout ce qu'ils feraient et n'écrivent
+qu'avec `--apply`. Rien ne se perd (fichiers à l'octet, modifications non enregistrées,
+fichiers ignorés comme `.env*`, historiques git), chaque déplacement est vérifié par
+empreinte, et un échec défait ce qui a été fait. **Arrêter d'abord tous les agents** du
+projet : un agent resté ouvert réécrirait l'ancien chemin.
+
+```powershell
+# Pour chaque projet de l'atelier : que faudrait-il faire ? Rien n'est écrit.
+harnais mise-a-niveau --atelier --racine C:\Atelier
+
+# Un projet : mémoire en brain\, droits réécrits, faits manquants, outputs\ -> assets\.
+harnais mise-a-niveau C:\Atelier\Projet
+harnais mise-a-niveau C:\Atelier\Projet --apply --agents-arretes
+
+# Une équipe « dossier d'avant » (brain\mind\<nom> + agents\<nom>\) -> un dossier par agent.
+harnais demenage C:\Atelier\Projet
+harnais demenage C:\Atelier\Projet --apply --agents-arretes
+```
+
+- **`mise-a-niveau`** amène la mémoire à `brain\` (depuis `.fact`/`.mind` ou `memoire\`, en
+  `git mv` : l'historique suit), réécrit les `perimetre.json` des agents vers les
+  nouvelles adresses (une copie `.avant-mise-a-niveau-<date>` de chaque fichier touché),
+  pose les faits et l'état manquants, déclare le paquet à la racine Git, et passe
+  `outputs\` (1.2 à 1.3) ou `brain\workbench\` (0.19 à 1.1) à `assets\` — **seulement s'il
+  n'y a pas déjà un `assets\`** : sinon le conflit est nommé et rien n'est fusionné. Ce qu'il
+  ne sait pas ranger (un fichier de trop dans les faits, un `AGENTS.md` qui cite l'ancien
+  chemin) est nommé, fichier et ligne.
+- **`demenage`** passe une équipe « dossier d'avant » à la forme de `adopte --equipe` :
+  la mémoire devient le dossier du projet (`fact\`, `shared\`, `docs\`, `assets\`),
+  chaque agent a `agents\<nom>\` (rôle, droits, état) et SA copie du code dans
+  `agents\<nom>\code`. Il rejoue les gestes de git (`worktree repair` après les
+  déplacements), compare avant et après le nombre de copies, les branches, l'état git
+  (modifications non enregistrées comprises) et l'inventaire des fichiers, et refuse de
+  faire monter un `.env*` ou un secret reconnu dans la mémoire. `brain\` peut avoir son
+  propre dépôt (il devient le projet) ou vivre dans le dépôt du code (ce que fait Copilot :
+  il est alors copié vers un dépôt neuf ; l'ancien reste intact dans le code, avec tout
+  son passé). `--premier NOM` choisit qui reçoit le checkout principal, `--copie NOM=CHEMIN`
+  donne à un agent une copie existante, `--en-plus NOM:SUJET=CHEMIN` une copie de plus.
+  Retirer ensuite `agents\`, `brain\`, `docs\`… du code est un enregistrement du code :
+  sur demande de l'humain seulement.
+- **La forme compacte** (profils `.github\agents\<nom>.agent.md`, une seule copie du code)
+  est un choix de Copilot : les deux outils la **nomment** et n'y touchent pas. Pour passer
+  à « un dossier par agent » : monter l'équipe neuve à côté (`harnais adopte --equipe A,B
+  --code <dépôt du code>` dans un dossier vide) et y reporter les faits, les états et les
+  rôles. Ce passage n'est pas porté par `demenage` : il faudrait créer une copie du code par
+  agent, séparer la mémoire du dépôt du code en réécrivant ou en perdant son historique, et
+  retrouver les droits dans des périmètres centralisés.
+- Écarté, faute d'objet chez Copilot : les conversations rangées par dossier de lancement et le
+  registre d'inscriptions au paquet (celui de Claude). Ici le paquet est déclaré dans
+  `.github\copilot\settings.json`, qui voyage avec le dépôt.
+
 ## Vérifier, avant de considérer l'installation terminée
 
 Dans le CLI interactif, `/instructions` doit montrer les instructions

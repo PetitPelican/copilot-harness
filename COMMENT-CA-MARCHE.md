@@ -495,6 +495,60 @@ La variable reste utile aux hôtes qui la prennent en charge, sans être une
 preuve de chargement. Un bloc de méthode déjà présent est conservé ; sa
 mise à jour doit être réconciliée explicitement avec les règles du projet.
 
+### 8 bis. Amener un projet existant à la forme actuelle
+
+Deux sous-commandes, `mise-a-niveau` (`py/niveau.py`) et `demenage` (`py/demenage.py`), portées
+du harnais Claude. Les trois formes de la section 8 plus la forme « un dossier par agent »
+(celle de `adopte --equipe`) donnent quatre points de départ, et chacun a un geste :
+
+| Le projet est... | Le geste | Ce qui bouge |
+|---|---|---|
+| `.fact`/`.mind` ou `memoire/` | `mise-a-niveau` | la mémoire va à `brain/`, `git mv` (l'historique suit) |
+| en `brain/`, mono ou équipe | `mise-a-niveau` | rien ; on complète (faits, état, carnet, paquet) |
+| équipe « dossier d'avant » | `demenage` | le code, ses copies et la mémoire, vers un dossier par agent |
+| équipe compacte | aucun, **nommée** | rien : c'est un choix de Copilot |
+| équipe « un dossier par agent » | `mise-a-niveau` | rien ; on complète |
+
+**Le contrat commun.** À blanc par défaut ; `--apply` écrit, et `--agents-arretes` est exigé
+dès que quelque chose bouge. Rien ne se perd, et chaque affirmation a son témoin : les
+fichiers déplacés ou copiés sont comparés par empreinte (SHA-256) à l'arrivée ; les copies
+du code, par nombre, branche, état git (HEAD et modifications non enregistrées) et
+inventaire (taille et date, fichiers ignorés compris, donc `.env*`). Un témoin rouge déclenche
+le retour arrière, par les mêmes gestes en sens inverse. Un `.env*`, un `.mcp.json`, un
+`operations.md` ou une clé de forme connue (le détecteur du coffre) ne monte jamais dans la
+mémoire : le plan est BLOQUÉ et nomme le fichier, jamais la valeur.
+
+**Ce que `mise-a-niveau` réécrit.** Les `deny` et `allow` des fichiers de droits
+(`agents/<nom>/.github/copilot/perimetre.json`, `.github/copilot/perimetres/<slug>.json`),
+par composants de chemin et non par sous-chaîne (`memoire` ne mord pas `memoire-old`) ; un
+droit relatif reste relatif, un absolu absolu, chacun garde son séparateur (`C:\…` comme
+`C:/…`), et la casse ne distingue rien sous Windows. Un dossier qui se sépare en deux
+(`memoire/agents/OPS` donne `brain/mind/OPS` et `brain/agents/OPS`) dédouble le droit qui le
+visait. `outputs/` et `brain/workbench/` passent à `assets/` si, et seulement si, il n'y a
+pas déjà un `assets/` ; sinon `CONFLIT`, rien n'est fusionné.
+
+**Ce que `demenage` produit** est ce que produit la naissance : mêmes dossiers, mêmes profils
+`.github/agents/`, mêmes périmètres (`equipe.perimetre_agent(..., equipe_forme=True)` : un
+agent sans périmètre reçoit celui de la naissance, un agent qui en avait un garde le sien,
+traduit), même déclaration du paquet, même `.gitignore`. Chaque droit garde son sens :
+`brain/mind/QA` devient `agents/QA`, `brain/fact` devient `fact`, `brain/workspace` devient
+`shared`, et tout ce qui était du code (`package.json`) devient celui de l'agent
+(`agents/<nom>/code/package.json`). Séquence du code : `mv P P.code-demenage`, la mémoire
+prend la place de `P`, `P.code-demenage` devient `agents/<premier>/code`, `git worktree
+repair`, `git worktree move` de chaque copie, une copie neuve (`git worktree add -b`) pour
+qui n'en avait pas.
+
+**Deux départs.** (A) `brain/` a son propre dépôt : il devient le projet, historique compris
+(séquence de Claude). (B) `brain/` est dans le dépôt du code, ce qui est l'ordinaire de
+Copilot (la mémoire se lit dans la copie courante, donc se commite avec le code) : rien ne
+peut sortir de ce dépôt sans le réécrire, la mémoire est donc **copiée** vers un dépôt neuf et
+l'ancienne reste intacte dans le code, avec tout son passé. Dans le cas B, un échec pendant la
+copie défait aussi le déplacement du code.
+
+**Ce qui n'est pas mesuré.** Le chemin Windows réel (`worktree move` sur un dossier tenu par
+un processus, chemins longs, antivirus) n'est éprouvé que par simulation de `os.name` et
+par des chaînes de chemins ; un gros projet réel n'a pas été déménagé.
+
 ---
 
 ## 9. Travailler à plusieurs agents dans l'app GitHub Copilot — la méthode
