@@ -86,6 +86,7 @@ import coffre
 import copilot
 import equipe
 import memoire
+import migration
 import niveau
 from memoire import Forme
 
@@ -121,7 +122,7 @@ def _git(ou, args):
 def _ok(ou, args):
     c, out, err = _git(ou, args)
     if c != 0:
-        raise RuntimeError("git %s (dans %s) : %s" % (" ".join(args), ou, (err or out).strip()[:300]))
+        raise RuntimeError("git %s (dans %s) : %s" % (" ".join(args), ou, (migration.raison(err) or out.strip())[:300]))
     return out
 
 

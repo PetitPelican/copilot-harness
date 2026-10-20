@@ -139,10 +139,25 @@ class Geste(object):
         self.comment = ""
 
 
+def raison(stderr):
+    """La raison d'un échec de git, lue sur sa sortie d'erreur SANS ses avertissements.
+    Git for Windows (autocrlf=true par défaut) écrit « warning: in the working copy of
+    '…', LF will be replaced by CRLF… » en tête, une ligne par fichier : tronqué à
+    quelques centaines de caractères, un message d'échec ne montrait QUE cela, et la
+    vraie raison (`fatal: …`) disparaissait. Si rien d'autre n'est dit, on rend tout."""
+    brut = [l.rstrip("\r") for l in (stderr or "").split("\n") if l.strip()]
+    utiles = [l for l in brut if not l.lstrip().lower().startswith("warning:")]
+    return "\n".join(utiles or brut).strip()
+
+
 def git(ou, args):
+    """`(code, sortie)`. La sortie est la sortie STANDARD : c'est elle seule qui sert de
+    verdict (`status --porcelain` vide = propre). La sortie d'erreur n'est lue que
+    pour dire POURQUOI git a échoué, et jamais mêlée à un verdict qui a réussi."""
     import subprocess
     try:
-        r = subprocess.run(["git"] + list(args), cwd=ou, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        r = subprocess.run(["git"] + list(args), cwd=ou, stdin=subprocess.DEVNULL,
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     except (OSError, ValueError):
         return -1, ""
     rc = r.returncode if r.returncode >= 0 else -1
@@ -150,8 +165,20 @@ def git(ou, args):
     if rc != 0 and not out:
         # Un échec dit pourquoi : git écrit sa raison sur la sortie d'erreur, et un
         # « PAS enregistré : » sans suite ne se répare pas (CI Windows de Claude, 16/10/2026).
-        out = r.stderr.decode("utf-8", "replace").strip()
+        out = raison(r.stderr.decode("utf-8", "replace"))
     return rc, out
+
+
+def identite_de_commit(depot):
+    """Les options `-c` qui donnent une identité à un commit quand git n'en a AUCUNE
+    (un PC neuf, un poste jetable) : sans elle `git commit` s'arrête sur « Author identity
+    unknown ». Une identité configurée n'est jamais remplacée. Git for Windows ne devine
+    pas l'adresse comme macOS : ce défaut n'apparaissait que là."""
+    for qui in ("GIT_AUTHOR_IDENT", "GIT_COMMITTER_IDENT"):
+        rc, _ = git(depot, ["var", qui])
+        if rc != 0:
+            return ["-c", "user.name=harnais", "-c", "user.email=harnais@atelier"]
+    return []
 
 
 def propre(depot):

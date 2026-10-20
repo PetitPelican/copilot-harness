@@ -711,10 +711,11 @@ def _commit(pl, gestes, message):
         d = migration.depot_porteur(vers, pl.racine)
         par_depot.setdefault(d, []).extend([migration.sans_prefixe(de, d), migration.sans_prefixe(vers, d)])
     for d, chemins in par_depot.items():
-        rc, out = migration.git(d, ["commit", "-q", "-m", message, "--"] + chemins)
+        rc, out = migration.git(d, migration.identite_de_commit(d)
+                                + ["commit", "-q", "-m", message, "--"] + chemins)
         if rc != 0:
             return ("le déplacement est fait mais PAS enregistré dans `%s` : %s"
-                    % (_court(d, pl.racine) or d, out[:200]))
+                    % (_court(d, pl.racine) or d, out[:300]))
     return None
 
 
