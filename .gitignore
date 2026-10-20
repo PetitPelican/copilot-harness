@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+
+/release/
+/.installer-test-output.txt
+/.installer-test-ps51-output.txt
+/.installer-tests-*/
+/.portable-smoke-*/
+/.portable-contract-*/
+/.portable-baseline-home/
+/.cto-start-*/

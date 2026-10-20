@@ -1,0 +1,60 @@
+name: paquet
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['main', 'python']
+    tags: ['v*']
+  pull_request:
+    branches: ['main']
+
+permissions:
+  contents: read
+
+jobs:
+  tester:
+    # Windows est la cible ; macOS prouve que le tronc commun ne dépend pas d'elle.
+    # 3.9 est le plancher promis, 3.12 le Python que Windows installe aujourd'hui.
+    strategy:
+      fail-fast: false
+      matrix:
+        machine: [windows-latest, macos-14]
+        python: ['3.9', '3.12']
+    runs-on: ${{ matrix.machine }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: hooks/copilot.json est celui de son générateur
+        run: python outils/genere_hooks.py --verifie
+      - name: suite de tests
+        run: python -m unittest discover -s tests -v
+      - name: conditionnement
+        run: python -m unittest discover -s scripts -p test_package_release.py -v
+      - name: hooks tels que Copilot les lance (powershell.exe 5.1 et pwsh)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./controles/hooks-powershell.ps1
+      - name: parcours complet par le lanceur
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./controles/portable-smoke.ps1 -Executable ./bin/harnais.cmd
+
+  assembler:
+    needs: tester
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: tester et assembler
+        run: python scripts/package_release.py
+      - uses: actions/upload-artifact@v5
+        with:
+          name: harnais
+          path: |
+            release/*.zip
+            release/*.zip.sha256
+          if-no-files-found: error
