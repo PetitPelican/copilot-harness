@@ -268,7 +268,7 @@ lit jamais comme un constat confirmé.*
 |---|---|---|
 | `brain/fact/` | faits communs du projet | 4 fichiers, 5 en équipe (`roles.md`) |
 | `brain/mind/` | état d'un agent : `state.md`, `todo.md` | 2 fichiers par agent |
-| `outputs/<nom>/` | ce que chaque agent produit (forme compacte, 0.19) | aucun |
+| `assets/<nom>/` | ce que chaque agent produit (forme compacte, 0.19) | aucun |
 | `brain/workspace/` | carnet d'équipe, ignoré par Git (seul `.gitkeep` voyage) | aucun |
 | `brain/poids.json` | confiance des sections de faits (voir plus bas) | — |
 | `docs/` | l'archive du projet : décisions, audits, passations, ressources | aucun |
@@ -398,7 +398,7 @@ que pour des lots aux rythmes et aux contextes disjoints (voir `roles.md`), jama
 |---|---|---|---|
 | Rôle | `AGENTS.md` du projet | `agents/<nom>/AGENTS.md` | `.github/agents/<slug>.agent.md` : profil Copilot **et** rôle |
 | Périmètre d'écriture | — | `agents/<nom>/.github/copilot/perimetre.json` | `.github/copilot/perimetres/<slug>.json` |
-| Ce que l'agent produit | — | `agents/<nom>/livrables/` | `outputs/<nom>/` (depuis 0.19) |
+| Ce que l'agent produit | — | `agents/<nom>/livrables/` | `assets/<nom>/` (depuis 0.19) |
 | État | `brain/mind/` | `brain/mind/<nom>/` | `brain/mind/<nom>/` |
 | L'agent se choisit | — | par le dossier de lancement ou le menu | **par le menu d'agent de l'app** (ou `copilot --agent`) |
 
@@ -415,7 +415,7 @@ projet/
   .github/copilot/settings.json              active le paquet, une fois pour tous
   brain/fact/                                faits communs (4 fichiers, + roles.md)
   brain/mind/<nom>/state.md et todo.md       état de chaque agent
-  outputs/<nom>/                     ce que chaque agent produit
+  assets/<nom>/                     ce que chaque agent produit
   brain/workspace/                           carnet d'équipe (ignoré par Git)
   brain/poids.json                           confiance des faits
   docs/                                      l'archive : décisions, audits, passations
@@ -442,7 +442,7 @@ facultativement, une liste `allow` ; `deny` prime. Un périmètre absent, illisi
   cela vient de son rôle et des comptes en lecture seule, pas de la garde, qui ne
   couvre ni le shell ni les outils MCP.
 
-**L'établi.** `outputs/<nom>/` reçoit les plans, analyses et scripts d'un
+**L'établi.** `assets/<nom>/` reçoit les plans, analyses et scripts d'un
 agent. Il est séparé de `docs/`, qui reste l'archive du projet. La garde de commit
 ne le compte pas comme du code : un script SQL livré dans l'établi n'oblige pas à
 mettre l'état à jour (le même fichier hors de l'établi, si). Un projet déjà compact
@@ -450,7 +450,7 @@ qui range ses productions ailleurs garde ses périmètres tels quels : changer d
 dossier est une migration décidée par l'humain, jamais faite par le harnais.
 Avant la 1.2, l'établi vivait dans `brain/workbench/<nom>/` : la garde de commit
 continue de l'ignorer, mais `brain/` ne porte plus que la mémoire, et un projet
-neuf, ou migré, range ses productions dans `outputs/`.
+neuf, ou migré, range ses productions dans `assets/`.
 
 **Qui parle.** L'app Copilot lance chaque conversation à la racine d'une copie
 de travail ou du dossier principal : le dossier de lancement ne dit pas qui parle.

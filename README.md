@@ -167,10 +167,10 @@ Le rôle et le profil peuvent avoir une seule maison :
 .github\copilot\settings.json                activation commune du plugin
 brain\fact\                                 faits communs
 brain\mind\OPS\state.md et todo.md            mémoire OPS
-outputs\OPS\                         productions OPS
+assets\OPS\                         productions OPS
 ```
 
-Depuis 1.2.0, `outputs\<nom>\` (à la racine, hors de `brain\`, qui ne porte que la mémoire ; avant : `brain\workbench\<nom>\`, depuis 0.19.0) est l'établi de chaque agent : ce qu'il produit (plans,
+Depuis 2.0.0, `assets\<nom>\` (à la racine, hors de `brain\`, qui ne porte que la mémoire ; avant : `outputs\<nom>\` en 1.2 à 1.3, `brain\workbench\<nom>\` depuis 0.19.0) est l'établi de chaque agent : ce qu'il produit (plans,
 analyses, scripts), séparé de `docs\`, qui reste l'archive du projet. La garde de
 commit ne le compte pas comme du code : un script SQL livré dans l'établi
 n'oblige pas à mettre l'état à jour. Un projet déjà compact qui range ses
@@ -199,7 +199,7 @@ harnais equipe --compact --project-root C:\Atelier\Projet --apply
 L'export préserve les personnalisations des profils et ajoute le rôle
 historique dans un bloc délimité. Il conserve les mémoires, les livrables,
 les sources et les anciens dossiers **sans les déplacer ni les supprimer**.
-Les instructions exportées renvoient à `outputs\<nom>` ; déplacer
+Les instructions exportées renvoient à `assets\<nom>` ; déplacer
 les livrables, archiver la passation et corriger les références des instructions
 communes et de la mémoire exigent une migration distincte approuvée.
 Relire les profils fusionnés, en particulier les consignes personnalisées.
@@ -364,7 +364,7 @@ travaillent dans **le même espace**, sans qu'un tiers intègre leur travail :
    `git fetch . dev:master` (refuse si `master` a divergé).
 
 Chaque agent n'écrit que dans son périmètre (sa mémoire, son établi
-`outputs\<nom>\`) ; une écriture hors périmètre est refusée. Les écritures
+`assets\<nom>\`) ; une écriture hors périmètre est refusée. Les écritures
 par le shell ne sont pas couvertes. La méthode complète, ce qui est mesuré et ce qui
 ne l'est pas : [COMMENT-CA-MARCHE.md](COMMENT-CA-MARCHE.md), section 9.
 
