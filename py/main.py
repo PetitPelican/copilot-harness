@@ -62,6 +62,8 @@ TABLE = {
     "equipe":        ("equipe", "main", "code", None),
     "equipe-vue":    ("vue", "main", "code", None),
     "brain-migre":   ("migration", "main", "code", None),
+    "mise-a-niveau": ("niveau", "main", "code", None),
+    "demenage":      ("demenage", "main", "code", None),
 }
 
 # Les hooks que `HARNAIS_JUGE` fait taire : le juge lancé par `copilot -p`
@@ -76,6 +78,13 @@ POSER LE HARNAIS SUR UN PROJET — le seul geste à connaître pour démarrer :
                `--go` pour écrire · `--equipe A,B,C [--modeles ops,po,qa] [--code D]` :
                une équipe neuve, un dossier par agent
   brain-migre  déplace une mémoire de l'ancienne organisation vers `brain/`
+  mise-a-niveau  amène un projet à la forme actuelle, mono ou équipe : mémoire en `brain/`,
+               droits réécrits, faits manquants, `outputs/` -> `assets/` ; sans rien perdre
+               à blanc par défaut · `--apply [--agents-arretes]` · `--atelier --racine R`
+               dit, pour chaque projet de l'atelier, ce qu'il faudrait faire
+  demenage     passe une équipe « dossier d'avant » (`brain/` + `agents/<nom>/`) à « un dossier
+               par agent » : code, copies, mémoire, droits ; la forme compacte est nommée, pas touchée
+               à blanc par défaut · `--apply --agents-arretes` · `--copie NOM=CHEMIN`
   equipe-vue   l'état de tous les projets d'un atelier — terminal ou `--html`
   equipe       passe un projet en équipe, ou lui ajoute un agent
                `--agents A,B` · `--retire A` · à blanc par défaut · `--apply`

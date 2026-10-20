@@ -4,9 +4,7 @@
  "version": 1,
  "ecartes": {
   "taches": "les tâches Notion : éteinte par défaut, sans usage dans un atelier Copilot",
-  "versions": "la version chargée par agent, lue par la relance de nuit du poste Claude : pas de relance de nuit côté Copilot",
-  "niveau": "migration d'une équipe d'avant vers « un dossier par agent » : à porter s'il existe une équipe Copilot d'avant",
-  "demenage": "idem niveau : déménagement code et mémoire d'une équipe d'avant"
+  "versions": "la version chargée par agent, lue par la relance de nuit du poste Claude : pas de relance de nuit côté Copilot"
  },
  "modules": {
   "adopte": {
