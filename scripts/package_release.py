@@ -30,7 +30,7 @@ FICHIERS = {
     "criteres-relecture.md", "rechutes.md", ".gitignore",
     "controles/portable-smoke.ps1", "controles/install-windows.ps1",
     "controles/hook-contract.ps1", "controles/cto-start.ps1",
-    "controles/hooks-powershell.ps1", "controles/LISEZMOI.md",
+    "controles/hooks-powershell.ps1", "controles/atelier-deplace.ps1", "controles/LISEZMOI.md",
 }
 # Ce qui ne part jamais, même suivi par git : l'état d'un poste.
 JAMAIS = ("__pycache__/", ".pyc")

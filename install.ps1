@@ -267,6 +267,26 @@ function Add-Environment {
     }
 }
 
+function Move-Workshop([string]$Old) {
+    $script:State.WorkshopRoot = $WorkshopRoot
+    if ($script:State.settings -and $script:State.settings.path -and
+        $script:State.settings.path.StartsWith($Old + '\', [StringComparison]::OrdinalIgnoreCase)) {
+        $script:State.settings.path = $WorkshopRoot + $script:State.settings.path.Substring($Old.Length)
+    }
+    Save-State
+    foreach ($scope in @($script:State.environment.Keys)) {
+        $current = [Environment]::GetEnvironmentVariable($script:EnvironmentName, $scope)
+        $parts = @($current -split ',' | Where-Object {
+            !($_.Trim().TrimEnd('\').Equals($Old.TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase))
+        })
+        $new = $parts -join ','
+        if (!(Has-Token $new $WorkshopRoot)) { $new = if ($new) { "$new,$WorkshopRoot" } else { $WorkshopRoot } }
+        $script:State.environment[$scope].after = $new
+        Save-State
+        [Environment]::SetEnvironmentVariable($script:EnvironmentName, $new, $scope)
+    }
+}
+
 function Remove-Environment {
     foreach ($scope in @($script:State.environment.Keys)) {
         $entry = $script:State.environment[$scope]
@@ -447,12 +467,23 @@ Assert-NoLinks $Destination
 $script:StatePath = Join-Path $Destination $script:StateName
 Assert-NoLinks $script:StatePath
 $existingState = Test-Path -LiteralPath $script:StatePath -PathType Leaf
+$script:MovedFrom = $null
 if ($existingState) {
     $script:State = Read-Json $script:StatePath
     if ($script:State.schema -ne 1 -or $script:State.destination -ne $Destination) {
         throw 'Invalid ownership journal; refusing to continue.'
     }
+    # A workshop moved since installation: Update would otherwise rebuild an
+    # empty one at the old path. Refuse, or follow it when -WorkshopRoot names
+    # the new place (checked below: it must hold the CTO).
+    if ($Action -eq 'Update' -and !(Test-Path -LiteralPath $script:State.WorkshopRoot -PathType Container)) {
+        if (!$PSBoundParameters.ContainsKey('WorkshopRoot')) {
+            throw "The journal's workshop no longer exists: $($script:State.WorkshopRoot). If it was moved, rerun with -WorkshopRoot <its new path>; Update will not recreate it."
+        }
+        $script:MovedFrom = $script:State.WorkshopRoot
+    }
     foreach ($key in @('WorkshopRoot', 'UserName', 'CtoName', 'CopilotHome', 'UserHome', 'EnvironmentScope')) {
+        if ($key -eq 'WorkshopRoot' -and $script:MovedFrom) { continue }
         if ($PSBoundParameters.ContainsKey($key) -and (Get-Variable $key -ValueOnly) -ne $script:State[$key]) {
             throw "$key differs from the ownership journal. Use another destination."
         }
@@ -466,6 +497,9 @@ if (!$WorkshopRoot -or [string]::IsNullOrWhiteSpace($UserName)) {
 }
 $WorkshopRoot = Full-Path $WorkshopRoot
 if ($WorkshopRoot.Contains(',')) { throw 'WorkshopRoot cannot contain a comma (instructions directories use commas).' }
+if ($script:MovedFrom -and !(Test-Path -LiteralPath (Join-Path $WorkshopRoot $CtoName) -PathType Container)) {
+    throw "-WorkshopRoot must be the moved workshop, holding its CTO: $(Join-Path $WorkshopRoot $CtoName) does not exist."
+}
 if ($CtoName -in @('.', '..') -or $CtoName.EndsWith('.') -or $CtoName.EndsWith(' ')) { throw 'Invalid CTO directory name.' }
 if (!$UserHome) { $UserHome = $env:USERPROFILE }
 $UserHome = Full-Path $UserHome
@@ -571,6 +605,9 @@ if ($Action -ne 'Uninstall') {
 Write-Host "$Action | source: $SourcePath | destination: $Destination"
 Write-Host "CLI: $script:Cli | config: $CopilotHome"
 Write-Host "Workshop: $WorkshopRoot | CTO: $CtoName | user: $UserName | environment: $EnvironmentScope"
+if ($script:MovedFrom) {
+    Write-Host "Workshop moved: $script:MovedFrom -> $WorkshopRoot (journal and instructions environment will follow; nothing is created at the old path)."
+}
 $memoryOwned = $script:State.ContainsKey('memory') -and $script:State.memory
 if ($Action -eq 'Uninstall') {
     if ($memoryOwned) { Write-Host "Copilot Memory: restore previous value ($($script:State.memory.previous)) if still off." }
@@ -633,6 +670,7 @@ try {
         Remove-Item -LiteralPath $script:StatePath -Force
         Write-Host 'Uninstalled owned integration. Workshop, Git history, memory, changed/unowned files and unrelated settings remain.'
     } else {
+        if ($script:MovedFrom) { Move-Workshop $script:MovedFrom }
         if (!$script:State.settings) { $script:State.settings = $settingsPlan }
         if (!$script:State.cliSettings) { $script:State.cliSettings = $cliSettingsPlan }
         Save-State

@@ -550,15 +550,18 @@ class Essais(unittest.TestCase):
         self.assertEqual([p.nom for p in vue.scanne(racine, "")], ["autre", "claude-harnais"])
         self.assertEqual([p.nom for p in vue.scanne(racine, "copilot-harness")], ["copilot-harness"])
 
-    def test_un_fait_workflow_est_en_trop_comme_pour_le_rust(self):
-        """Le Rust ne connaît pas `workflow.md` : il compte comme un fichier en trop."""
+    def test_workflow_n_est_pas_en_trop_un_inconnu_si(self):
+        """`workflow.md`, qu'adopte et mise-a-niveau posent, n'est pas « en trop »
+        (21/10/2026 : un projet adopté sortait TROP pour ce fichier). Le témoin :
+        un nom que le harnais ne prévoit pas l'est toujours."""
         d = self.brain_mono("workflow")
         trace(d, courante())
         ins = inscrit([d], courante())
         self.assertEqual(juge(d, ins)[0], "ok")
         ecris(d, "brain/fact/workflow.md", "x\n")
+        self.assertEqual(juge(d, ins)[0], "ok")
+        ecris(d, "brain/fact/divers.md", "x\n")
         self.assertEqual(juge(d, ins)[0], "surplus")
-        self.assertIn("faits 5/4", vue.jauge(vue.harnais(d, ins)))
 
 
 if __name__ == "__main__":

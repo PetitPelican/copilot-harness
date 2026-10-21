@@ -438,8 +438,14 @@ l'installateur refuse de remplacer une inscription qu'il ne possède pas.
 - Un hook simulé ne prouve pas son déclenchement dans une vraie session.
   Le CLI 1.0.90-0 a été utilisé pour mesurer les identifiants des événements
   de briefing ; les autres hôtes doivent être vérifiés séparément.
-- Le relecteur utilise le modèle par défaut du CLI, ou
-  `HARNAIS_MODELE_JUGE` si fourni ; un échec est explicitement insuffisant.
+- Le relecteur et le juge des experts prennent `gpt-6-luna` en raisonnement
+  élevé, ou `HARNAIS_MODELE_JUGE` si fourni ; un échec est explicitement
+  insuffisant. Les profils d'agent générés portent `model: gpt-6.1-sol` et
+  `reasoning-effort: high` ; l'app Copilot qui lit ce second champ n'a pas été
+  vérifiée en session réelle.
+- `controles/hook-contract.ps1` et `controles/cto-start.ps1` lancent le vrai
+  CLI dans un profil isolé : ils demandent une connexion à Copilot et ne
+  tournent pas hors ligne.
 - Windows est la plateforme de validation. La chaîne prévoit
   macOS Apple Silicon ; sa réussite doit être vérifiée sur un Mac.
 - Selon sa politique d'exécution, Windows PowerShell 5.1 peut refuser les

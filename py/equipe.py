@@ -344,11 +344,11 @@ def profil_role(p, n, appliquer, rap):
     rap.append(("+", "%s — profil et rôle uniques ; livrables dans %s/" % (rel(p, f), agent.banc(n))))
     if appliquer:
         s = agent.nom_de_profil(n)
-        texte = ("---\nname: %s\ndescription: Agent %s — rôle propre au projet\n---\n"
+        texte = ("---\nname: %s\ndescription: Agent %s — rôle propre au projet\n%s---\n"
                  "Lis brain/mind/%s/state.md et brain/mind/%s/todo.md à la reprise. "
                  "Le harnais applique .github/copilot/perimetres/%s.json.\n\n"
                  "<!-- harnais:role:start -->\n%s<!-- harnais:role:end -->\n"
-                 % (s, n, n, n, s, role(n, nom(p))))
+                 % (s, n, copilot.entete_modele(), n, n, s, role(n, nom(p))))
         _mkdirs_ou_refus(os.path.dirname(f))
         _ecrit_ou_refus(f, texte)
 
@@ -530,13 +530,15 @@ def profil(racine_git, projet, n, esprit, appliquer, rap):
         return
     rap.append(("+", "%s — l'agent %s dans le menu d'agent de l'app" % (rel(projet, f), n)))
     if appliquer:
+        import copilot
         role_ = "agents/%s/AGENTS.md" % n
         etat = rel(projet, esprit)
-        texte = ("---\nname: %s\ndescription: Agent %s de %s — son rôle est dans %s\n---\n"
+        texte = ("---\nname: %s\ndescription: Agent %s de %s — son rôle est dans %s\n%s---\n"
                  "Tu es l'agent %s de ce projet. À chaque ouverture, le harnais te sert ton rôle (%s), "
                  "ton état (%s/) et ton périmètre d'écriture.\n\n"
                  "S'il ne te les a pas montrés, lis d'abord %s, puis %s/state.md et %s/todo.md, avant toute réponse.\n"
-                 % (nom_profil, n, nom(projet), role_, n, role_, etat, role_, etat, etat))
+                 % (nom_profil, n, nom(projet), role_, copilot.entete_modele(),
+                    n, role_, etat, role_, etat, etat))
         _mkdirs(os.path.dirname(f))
         _ecrit_ou_rien(f, texte)
 

@@ -40,6 +40,10 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: ./controles/portable-smoke.ps1 -Executable ./bin/harnais.cmd
+      - name: atelier déplacé (mise à jour, prévisualisation)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./controles/atelier-deplace.ps1
 
   assembler:
     needs: tester

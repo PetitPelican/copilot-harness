@@ -83,8 +83,8 @@ def prepare(p):
                 else:
                     raise copilot.Refus("%s : frontmatter absent ; réconcilier à la main" % profil)
             else:
-                base = ("---\nname: %s\ndescription: Agent %s — rôle et mémoire propres au projet\n---\n"
-                        % (agent.nom_de_profil(n), n))
+                base = ("---\nname: %s\ndescription: Agent %s — rôle et mémoire propres au projet\n%s---\n"
+                        % (agent.nom_de_profil(n), n, copilot.entete_modele()))
             # Un profil déjà autonome n'a pas besoin d'un ancien AGENTS.md.
             if role is not None:
                 texte = "%s\n\n%s\n%s%s\n" % (_rstrip(base), DEBUT,

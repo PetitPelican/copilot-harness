@@ -27,7 +27,7 @@ try {
     $workshop = Join-Path $root 'Agentic'
     $cto = Join-Path $workshop 'CTO'
     New-Item -ItemType Directory $source, $cto | Out-Null
-    foreach ($relative in @('.github\plugin', 'bin', 'hooks', 'skills',
+    foreach ($relative in @('.github\plugin', 'bin', 'py', 'hooks', 'skills',
         'criteres-passe.md', 'criteres-relecture.md', 'rechutes.md')) {
         $to = Join-Path $source $relative
         [IO.Directory]::CreateDirectory((Split-Path $to -Parent)) | Out-Null

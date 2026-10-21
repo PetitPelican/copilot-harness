@@ -460,24 +460,29 @@ prise.
 
 ## Déléguer
 
-**Tout agent délégué prend le modèle intermédiaire par défaut.**
+**Deux modèles, tous deux en raisonnement élevé (`high`) :**
+
+| Qui | Modèle |
+|---|---|
+| L'agent principal (OPS, PO, QA…) | `gpt-6.1-sol` — posé dans l'en-tête de son profil `.agent.md` (`model:` et `reasoning-effort:`) |
+| Tout délégué : outil `task`, `copilot -p`, relecteur, juge des experts | `gpt-6-luna` |
 
 | Comment | La forme |
 |---|---|
-| Outil `task` | préciser le modèle intermédiaire disponible si l'outil permet de le choisir |
-| Processus séparé | `copilot -p "<invite>" --model <id-intermédiaire>` |
-| Agent personnalisé | `.github/agents/<nom>.agent.md` avec `model: <id-intermédiaire>` et `include-custom-instructions: true` pour que le sous-agent reçoive aussi les instructions du dépôt |
+| Outil `task` | préciser `gpt-6-luna` si l'outil permet de choisir le modèle |
+| Processus séparé | `copilot -p "<invite>" --model gpt-6-luna --reasoning-effort high` |
+| Agent personnalisé | `.github/agents/<nom>.agent.md` avec `model: gpt-6-luna`, `reasoning-effort: high` et `include-custom-instructions: true` pour que le sous-agent reçoive aussi les instructions du dépôt |
 
-Un modèle plus gros demande une **consigne explicite de l'humain**, au cas par
-cas. Ce n'est pas au parent d'en décider pour son enfant.
+Un autre modèle demande une **consigne explicite de l'humain**, au cas par cas.
+Ce n'est pas au parent d'en décider pour son enfant. Le relecteur et le juge des
+experts en prennent un autre si `HARNAIS_MODELE_JUGE` est posé.
 
 **Pourquoi.** Un sous-agent démarre à froid : il redérive un contexte que le
 parent possède déjà, et il le paie en entier. Le coût d'un sous-agent est donc
-dans le **lancement**, pas dans le prix du jeton — et une grappe de sous-agents
-sur le plus gros modèle vide un quota en un après-midi. Pour du travail
-**cadré** — une recherche, un balayage, un portage mécanique — le modèle
-intermédiaire suffit ; c'est le cadrage qui fait la qualité du retour, pas la
-taille du modèle.
+dans le **lancement** — et une grappe de sous-agents sur le modèle principal
+vide un quota en un après-midi. Pour du travail **cadré** — une recherche, un
+balayage, un portage mécanique — c'est le cadrage qui fait la qualité du
+retour, pas la taille du modèle.
 
 Corollaire : **ne pas lancer de sous-agent quand la tâche ne l'exige pas.** Une
 tâche « en plusieurs points » ou « à traiter à fond » n'est pas une demande de
@@ -486,7 +491,7 @@ balayer, dont on ne veut que la conclusion — ou ce que l'humain demande
 nommément.
 
 Les identifiants de modèles vieillissent ; la règle, elle, ne change pas :
-**par défaut le modèle intermédiaire, l'escalade sur consigne.**
+**l'agent principal sur Sol, les délégués sur Luna, l'escalade sur consigne.**
 
 ---
 

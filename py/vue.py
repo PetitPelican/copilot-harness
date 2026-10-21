@@ -463,8 +463,9 @@ def harnais(p, ins):
     def aff(d):
         return socle.chemin_affiche(p, d) + "/"
     fact = []
-    # Les cinq noms, mono et équipe confondus (le `socle::faits_tous` du Rust).
-    faits_tous = socle.FAITS_MONO + [socle.FAITS_EQUIPE]
+    # Mono, équipe ET communs : `workflow.md`, qu'adopte et mise-a-niveau posent,
+    # n'est pas « en trop » (relevé sur un poste le 21/10/2026).
+    faits_tous = socle.faits_tous()
     if r.fact is not None:
         d = r.fact
         ici = md_de(d, "md") if est_dir(d) else []

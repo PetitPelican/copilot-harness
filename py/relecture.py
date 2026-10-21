@@ -35,7 +35,7 @@ PLAFOND_JOUR = 12
 # oublié par un processus tué ne doit pas bloquer le dispositif pour toujours.
 VERROU_PERIME_S = 900
 
-# Le modèle du juge : celui du CLI Copilot par défaut, ou `HARNAIS_MODELE_JUGE`.
+# Le modèle du juge : `copilot.options_juge` (Luna, raisonnement élevé), ou `HARNAIS_MODELE_JUGE`.
 
 # `str::trim` du Rust : les caractères White_Space d'Unicode. `str.strip()`
 # retirerait aussi \x1c à \x1f, que le Rust laisse.
@@ -173,9 +173,7 @@ def juge(invite_):
                 "dans PATH ou le SDK")
     c = [exe, "-p", invite_, "--silent", "--no-custom-instructions", "--disable-builtin-mcps",
          "--available-tools", "--no-ask-user", "--no-auto-update", "--no-remote-export"]
-    modele = os.environ.get("HARNAIS_MODELE_JUGE", "").strip()
-    if modele:
-        c += ["--model", modele]
+    c += copilot.options_juge()
     env = dict(os.environ)
     # Le juge tourne dans le dossier de l'agent : sans ça, ses propres hooks
     # (briefing, fin de tour) partiraient pendant qu'il juge.

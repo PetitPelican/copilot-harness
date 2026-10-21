@@ -445,10 +445,10 @@ def main(args):
                 if not s or sum(1 for n in equipe_noms if agent.nom_de_profil(n) == s) != 1:
                     _e("adopte : nom de profil vide ou en collision : %s" % a)
                     return 1
-                c = ("---\nname: %s\ndescription: Agent %s — rôle propre au projet\n---\n"
+                c = ("---\nname: %s\ndescription: Agent %s — rôle propre au projet\n%s---\n"
                      "Lis brain/mind/%s/state.md et brain/mind/%s/todo.md à la reprise.\n\n"
                      "<!-- harnais:role:start -->\n%s<!-- harnais:role:end -->\n"
-                     % (s, a, a, a, agents_md_agent(a, nom)))
+                     % (s, a, copilot.entete_modele(), a, a, agents_md_agent(a, nom)))
                 rap.pose(profil, "profil et rôle uniques de %s" % a, c)
                 ecrits.append((profil, c))
                 garde = agent.perimetre_compact(racine, a)

@@ -263,9 +263,7 @@ def juge(texte_invite):
     c = [exe, "-p", texte_invite, "--silent", "--no-custom-instructions",
          "--disable-builtin-mcps", "--available-tools", "--no-ask-user",
          "--no-auto-update", "--no-remote-export"]
-    modele = os.environ.get("HARNAIS_MODELE_JUGE", "").strip()
-    if modele:
-        c += ["--model", modele]
+    c += copilot.options_juge()
     try:
         r = subprocess.run(c, stdin=subprocess.DEVNULL, cwd=ici, env=env,
                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=DELAI_JUGE)

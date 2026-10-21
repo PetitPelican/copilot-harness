@@ -16,6 +16,29 @@ PAQUET = "harnais@atelier-copilot"
 
 WINDOWS = os.name == "nt"
 
+# LES MODÈLES DE L'ATELIER COPILOT (demande de l'humain, 21/10/2026). Ici, pas
+# de « modèle intermédiaire par défaut » comme côté Claude : l'agent principal
+# (OPS, PO, QA…) prend Sol, tout délégué (outil `task`, `copilot -p`, relecteur,
+# juge des experts) prend Luna, tous deux en raisonnement élevé.
+MODELE_AGENT = "gpt-6.1-sol"
+MODELE_DELEGUE = "gpt-6-luna"
+EFFORT = "high"
+
+
+def entete_modele():
+    """Les deux lignes d'en-tête d'un profil `.agent.md` d'agent principal."""
+    return "model: %s\nreasoning-effort: %s\n" % (MODELE_AGENT, EFFORT)
+
+
+def options_juge():
+    """Le modèle d'un juge lancé par `copilot -p` : Luna en raisonnement élevé ;
+    `HARNAIS_MODELE_JUGE` en force un autre, sans imposer d'effort (tous les
+    modèles ne l'acceptent pas)."""
+    force = os.environ.get("HARNAIS_MODELE_JUGE", "").strip()
+    if force:
+        return ["--model", force]
+    return ["--model", MODELE_DELEGUE, "--reasoning-effort", EFFORT]
+
 
 class Refus(Exception):
     """Une erreur qui, dans la garde, vaut refus (le `Err(String)` du Rust)."""
