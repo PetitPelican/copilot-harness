@@ -97,7 +97,8 @@ class Adoption(Banc):
 
     def test_rien_ne_s_ecrase_et_un_second_passage_ne_pose_rien(self):
         self.adopte("svc/flux_a", "OPS,PO", "flux-a")
-        with open(os.path.join(self.depot, "svc", "flux_a", "brain", "mind", "OPS", "todo.md"), "a") as h:
+        with open(os.path.join(self.depot, "svc", "flux_a", "brain", "mind", "OPS", "todo.md"), "a",
+                  encoding="utf-8") as h:
             h.write("- [ ] à moi\n")
         out = self.adopte("svc/flux_a", "OPS,PO", "flux-a")
         self.assertIn("déjà au harnais", out)

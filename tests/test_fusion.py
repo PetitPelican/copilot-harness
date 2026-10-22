@@ -182,14 +182,14 @@ class Briefing(DeuxCopies):
         sys.path.insert(0, os.path.join(os.path.dirname(ICI), "py"))
         r = subprocess.run([sys.executable, "-c", "import fusion,sys;print(fusion.ligne_briefing(sys.argv[1]))",
                             os.path.join(self.b, "svc", "flux_a", "brain", "mind", "OPS")],
-                           cwd=os.path.join(os.path.dirname(ICI), "py"), env=_env(self.d),
+                           cwd=os.path.join(os.path.dirname(ICI), "py"), env=_env(self.d, PYTHONIOENCODING="utf-8"),
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         t = r.stdout.decode("utf-8")
         self.assertIn("origin/main", t, r.stderr.decode())
         self.assertIn("1 fichier(s) de la mémoire", t)
         r = subprocess.run([sys.executable, "-c", "import fusion,sys;print(fusion.ligne_briefing(sys.argv[1]))",
                             os.path.join(self.a, "svc", "flux_a", "brain", "mind", "OPS")],
-                           cwd=os.path.join(os.path.dirname(ICI), "py"), env=_env(self.d),
+                           cwd=os.path.join(os.path.dirname(ICI), "py"), env=_env(self.d, PYTHONIOENCODING="utf-8"),
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         # Le témoin : A a tout intégré — aucun retard à signaler.
         self.assertNotIn("commit(s) que tu n'as pas", r.stdout.decode("utf-8"))
