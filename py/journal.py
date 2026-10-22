@@ -88,11 +88,27 @@ def suffixe_agent(racine, projet):
     # COPILOT, forme compacte : le harnais se place dans `brain/mind/<nom>`.
     if len(rel) == 2 and rel[0] == "agents":
         nom = rel[1]
-    elif len(rel) == 3 and rel[0] == "brain" and rel[1] == "mind":
-        nom = rel[2]
+    elif len(rel) >= 3 and rel[-3] == "brain" and rel[-2] == "mind":
+        # Un projet logé : `<dossier>/brain/mind/<nom>` — son journal vit dans
+        # son dossier (`dossier_journal`), le nom suffit à le distinguer.
+        nom = rel[-1]
     else:
         return ""
     return _slug(nom)
+
+
+def dossier_journal(racine, declare):
+    """`.logs/` du projet : à la racine du dépôt, sauf pour un projet LOGÉ dans un
+    sous-dossier, dont le journal vit à côté de son code et de sa mémoire —
+    `<dossier>/.logs/`. Deux projets d'un même dépôt ne mêlent pas leurs journaux."""
+    import os
+    if declare:
+        import memoire
+        res = memoire.resous_depuis(racine, declare)
+        if (res.forme == memoire.Forme.Brain and res.prefixe_projet
+                and res.arbre is not None and memoire._canon(racine) == res.arbre):
+            return os.path.join(racine, *res.prefixe_projet.strip("/").split("/") + [DOSSIER])
+    return os.path.join(racine, DOSSIER)
 
 
 def _slug(nom):
@@ -199,7 +215,7 @@ def main(entree):
         res = memoire.resous(declare)
         if res.forme == memoire.Forme.Equipe and res.nom_agent:
             suffixe = _slug(res.nom_agent)
-    fichier = os.path.join(racine, DOSSIER, "%s%s.md" % (jour, suffixe))
+    fichier = os.path.join(dossier_journal(racine, declare), "%s%s.md" % (jour, suffixe))
     try:
         with open(fichier, encoding="utf-8", newline="") as h:
             deja = h.read()

@@ -283,11 +283,9 @@ def fichier_perimetre(d):
     perimetre.json`)."""
     arbre = _racine_git_ou_rien(d)
     if arbre is not None:
-        import memoire
-        l = memoire.lot(d)
-        if "/" in l:
-            nom = l.rsplit("/", 1)[1]
-            import agent
+        import agent
+        nom = agent.nom_en(arbre, d)
+        if nom is not None:
             if agent.compact(arbre, nom):
                 return agent.perimetre_compact(arbre, nom)
     return os.path.join(str(d), ".github", "copilot", "perimetre.json")

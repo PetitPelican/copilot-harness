@@ -218,6 +218,10 @@ def racines(charge):
         return (res.mind if res.nom_agent else res.projet, res.projet)
     if res.forme == memoire.Forme.Brain:
         agent = _canon(d) or d
+        if res.prefixe_projet and res.projet is not None:
+            # UN PROJET LOGÉ : le projet est le dossier qui porte `brain/`, pas
+            # la racine du dépôt — ses `docs/` et son nom sont là.
+            return (agent, os.path.dirname(res.projet))
         return (agent, res.racine or agent)
     if memoire.pour_agent(d)[0] is not None:
         agent = _canon(d) or d
@@ -432,9 +436,9 @@ def surveilles(r, projet):
     surv.append(copilot.settings(arbre if arbre is not None else r))
     surv.append(copilot.fichier_perimetre(r))
     if arbre is not None:
-        l = memoire.lot(r)
-        if "/" in l:
-            surv.append(agent.profil(arbre, l.rsplit("/", 1)[1]))
+        n = agent.nom_en(arbre, r)
+        if n is not None:
+            surv.append(agent.profil(arbre, n))
     surv.append(os.path.join(r, "CLAUDE.md"))
     surv.append(os.path.join(r, "AGENTS.md"))
     surv.append(os.path.join(projet if projet is not None else r, atelier.REGISTRE))
@@ -958,6 +962,14 @@ def compose(r, projet, session):
         # Mesuré le 10/09/2026 sur un projet neuf converti en équipe.
         l.append("attente: aucune tâche `@<qui>` ouverte dans %s"
                  % socle.chemin_affiche(aff, os.path.join(md, "todo.md")))
+    # LA MÉMOIRE VOYAGE AVEC LE CODE (2.2.0) : quand la branche suivie a des
+    # commits que cette copie n'a pas, l'agent l'apprend AVANT de travailler sur
+    # un état périmé. Références locales seulement : aucun réseau ici.
+    if brain:
+        import fusion
+        lp = fusion.ligne_briefing(r)
+        if lp is not None:
+            l.append(lp)
 
     # LA CIBLE, AU-DESSUS DE TOUT LE RESTE DU PROJET : d'abord ce qui attend
     # @user, puis vers quoi on va, et seulement ensuite ce que les autres ont

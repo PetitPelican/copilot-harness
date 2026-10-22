@@ -212,9 +212,12 @@ def lot(depart):
     if len(p) >= 2 and p[0] == "agents":
         return "%s/%s" % (p[0], p[1])
     # COPILOT, forme compacte : l'agent n'a pas de dossier `agents/<nom>/`, le
-    # harnais se place dans son esprit (`brain/mind/<nom>`, voir `agent`).
-    if len(p) >= 3 and p[0] == "brain" and p[1] == "mind":
-        return "brain/mind/%s" % p[2]
+    # harnais se place dans son esprit (`brain/mind/<nom>`, voir `agent`). Un
+    # projet LOGÉ dans un sous-dossier du dépôt porte le sien plus bas :
+    # `<dossier du projet>/brain/mind/<nom>`.
+    for i in range(len(p) - 2):
+        if p[i] == "brain" and p[i + 1] == "mind":
+            return "/".join(p[:i + 3])
     return ""
 
 
@@ -448,6 +451,28 @@ def porteur_equipe(depart):
         p = parent
 
 
+def porteur_loge(depart, arbre):
+    """LE PROJET LOGÉ qui contient `depart` : le premier dossier, en remontant,
+    STRICTEMENT sous `arbre`, qui porte `brain/fact/` ou `brain/mind/` ; sinon None.
+
+    Un même dépôt de code héberge plusieurs projets, chacun dans son dossier ; la
+    mémoire de chacun vit à côté de son code (`<dossier>/brain/`), partagée par
+    push et pull comme le code. La racine elle-même n'est PAS un projet logé :
+    son `brain/` est la forme de toujours. Aucun appel à git : des `isdir`."""
+    if _strip_prefix(depart, arbre) is None:
+        return None
+    p = str(depart)
+    while p != arbre:
+        b = os.path.join(p, BRAIN)
+        if os.path.isdir(os.path.join(b, "fact")) or os.path.isdir(os.path.join(b, "mind")):
+            return p
+        q = os.path.dirname(p)
+        if not q or q == p:
+            return None
+        p = q
+    return None
+
+
 def dossier_du_commit(cmd, courant):
     """OÙ GIT VA VRAIMENT TOURNER — `git -C <dir>` ou `cd <dir> && …` en tête.
 
@@ -541,6 +566,31 @@ def resous_depuis(ou_git, depart):
             prefixe_fact="fact/",
             prefixe_mind=le + "/" if le else "agents/",
             lot=le, prefixe_lot=le + "/" if le else "", nom_agent=n,
+            racine=racine, arbre=arbre)
+
+    # ── v2 · UN PROJET LOGÉ DANS LE DÉPÔT ───────────────────────────────────
+    # AVANT la question de l'ambiguïté : un projet logé qui a son cerveau n'est pas
+    # à cheval parce que la racine en porte un autre — c'est justement le cas d'une
+    # mémoire de racine qu'on n'a pas encore descendue dans son dossier.
+    loge = porteur_loge(depart_c, arbre)
+    if loge is not None:
+        c = os.path.join(loge, BRAIN)
+        rel = "/".join(_strip_prefix(loge, arbre)) + "/"
+        nom = l.rsplit("/", 1)[-1] if l.startswith(rel + BRAIN + "/mind/") else ""
+        autonome = os.path.exists(os.path.join(c, ".git"))
+        pre = "" if autonome else rel + BRAIN + "/"
+        ws = os.path.join(c, "workspace")
+        return Resolution(
+            forme=Forme.Brain,
+            brain_autonome=autonome,
+            fact=os.path.join(c, "fact"),
+            mind=os.path.join(c, "mind", nom) if nom else os.path.join(c, "mind"),
+            workspace=ws if os.path.isdir(ws) else None,
+            projet=c,
+            prefixe_projet="" if autonome else rel,
+            prefixe_fact=pre + "fact/",
+            prefixe_mind=pre + "mind/" + (nom + "/" if nom else ""),
+            lot=l if nom else "", prefixe_lot=lp if nom else "", nom_agent=nom,
             racine=racine, arbre=arbre)
 
     en_place = porteur_des_faits(depart_c, arbre)

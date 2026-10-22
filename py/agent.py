@@ -71,6 +71,22 @@ CONTROLE = [".github/agents", ".github/copilot"]
 
 MARQUE_ROLE = "<!-- harnais:role:start -->"
 
+# UN PROJET LOGÉ DANS UN SOUS-DOSSIER DU DÉPÔT (2.2.0). L'app ne lit les profils,
+# les réglages et la méthode qu'à la RACINE git : la session s'ouvre donc là, et
+# c'est le profil choisi dans le menu qui désigne le projet. Le profil le dit dans
+# son corps, par cette marque — un commentaire, que l'app transmet au modèle sans
+# l'interpréter ; une clé inconnue dans l'en-tête, elle, risquerait de faire
+# écarter le profil par l'app, sans un mot :
+#
+#     <!-- harnais:projet dossier="services/flux-a" esprit="OPS" -->
+#
+# La mémoire de l'agent est alors `<dossier>/brain/mind/<esprit>/`, ses livrables
+# `<dossier>/assets/<esprit>/`, et son nom d'agent celui du profil (`flux-a-ops`) :
+# deux projets ont chacun leur OPS sans se confondre.
+MARQUE_PROJET = "harnais:projet"
+_MARQUE_PROJET = re.compile(
+    r'<!--\s*harnais:projet\s+dossier="([^"]+)"\s+esprit="([^"]+)"\s*-->')
+
 
 def banc(nom):
     return "%s/%s" % (BANC, nom)
@@ -195,6 +211,75 @@ def perimetre_compact(arbre, nom):
     return os.path.join(str(arbre), ".github", "copilot", "perimetres", "%s.json" % nom_de_profil(nom))
 
 
+_LOGES = {}
+
+
+def marque_projet(dossier, esprit):
+    """La ligne que porte le profil d'un agent de projet logé."""
+    return '<!-- %s dossier="%s" esprit="%s" -->' % (MARQUE_PROJET, dossier, esprit)
+
+
+def loges(arbre):
+    """LES AGENTS DES PROJETS LOGÉS : `{nom de profil: (dossier, esprit)}`, lus dans
+    les profils `.github/agents/*.agent.md` de la racine. Le dossier est relatif à
+    la racine, écrit avec `/`. Une marque qui sort du dépôt (`..`, absolu) est
+    ignorée : un profil ne désigne pas une mémoire hors de sa copie. Lu une fois par
+    processus et par racine."""
+    arbre = str(arbre)
+    if arbre in _LOGES:
+        return _LOGES[arbre]
+    v = {}
+    d = os.path.join(arbre, ".github", "agents")
+    try:
+        noms = sorted(os.listdir(d))
+    except OSError:
+        noms = []
+    for f in noms:
+        if not f.endswith(".agent.md"):
+            continue
+        t = _lis(os.path.join(d, f))
+        m = _MARQUE_PROJET.search(t or "")
+        if m is None:
+            continue
+        dossier = m.group(1).replace("\\", "/").strip("/")
+        esprit = m.group(2).strip()
+        morceaux = dossier.split("/")
+        if (not dossier or os.path.isabs(dossier) or ":" in dossier or ".." in morceaux
+                or not esprit or any(c in esprit for c in "/\\:") or esprit in (".", "..")):
+            continue
+        v[f[:-len(".agent.md")]] = (dossier, esprit)
+    _LOGES[arbre] = v
+    return v
+
+
+def esprit_loge(arbre, nom):
+    """`<arbre>/<dossier>/brain/mind/<esprit>` pour un agent de projet logé, sinon None."""
+    e = loges(arbre).get(nom)
+    if e is None:
+        return None
+    return os.path.join(str(arbre), *(e[0].split("/") + ["brain", "mind", e[1]]))
+
+
+def nom_en(arbre, depart):
+    """LE NOM D'AGENT D'UNE POSITION — celui qui nomme son profil et son périmètre.
+
+    `agents/<nom>/` ou `brain/mind/<nom>/` : `<nom>`. Dans l'esprit d'un projet logé
+    (`<dossier>/brain/mind/<esprit>/`), le nom du profil qui le déclare : deux
+    projets ont chacun leur OPS, et `ops.json` ne dirait pas lequel. None hors
+    d'un agent."""
+    import memoire
+    l = memoire.lot(depart)
+    if "/" not in l:
+        return None
+    p = l.split("/")
+    if len(p) > 3:
+        cible = "/".join(p[:-3])
+        for n, (dossier, esprit) in loges(arbre).items():
+            if dossier == cible and esprit == p[-1]:
+                return n
+    return p[-1]
+
+
 def agents_du_projet(arbre):
     """LES AGENTS DU PROJET : les dossiers de `agents/` qui ont un ESPRIT — dans le
     cerveau (`brain/mind/<nom>/`), en place (`agents/<nom>/.mind/`) ou déporté. Un
@@ -237,6 +322,11 @@ def agents_du_projet(arbre):
             if (not n.startswith(".") and n not in v
                     and os.path.isfile(os.path.join(arbre, "agents", n, "state.md"))):
                 v.append(n)
+    # LES PROJETS LOGÉS : un profil marqué dont l'esprit existe.
+    for n in loges(arbre):
+        e = esprit_loge(arbre, n)
+        if n not in v and e is not None and os.path.isdir(e):
+            v.append(n)
     v.sort()
     return v
 
@@ -250,6 +340,8 @@ def _lis(p):
 
 
 def compact(arbre, nom):
+    if nom in loges(arbre):
+        return True
     t = _lis(profil(arbre, nom))
     return (os.path.exists(perimetre_compact(arbre, nom))
             or (t is not None and MARQUE_ROLE in t)
@@ -259,6 +351,9 @@ def compact(arbre, nom):
 
 def contexte(arbre, nom):
     """Le contexte du hook n'est pas le dossier de travail de Copilot."""
+    e = esprit_loge(arbre, nom)
+    if e is not None:
+        return e
     if compact(arbre, nom):
         return os.path.join(str(arbre), "brain", "mind", nom)
     return os.path.join(str(arbre), "agents", nom)
@@ -351,8 +446,7 @@ def resous(reel, lecture):
     s = Session(reel, arbre, list(agents), lecture)
     if arbre is None or not agents:
         return s
-    l = memoire.lot(reel)
-    dossier = l.rsplit("/", 1)[1] if "/" in l else None
+    dossier = nom_en(arbre, reel)
     if dossier is not None and dossier not in agents:
         dossier = None
     c = s.lecture.choix

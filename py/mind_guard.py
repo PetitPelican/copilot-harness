@@ -492,6 +492,11 @@ def juge(entree, depart):
         # ouvrir — mesuré, 8 cas sur 9, le 10/09/2026.
         if not autorise(cmd, "fact-ok") and not autorise(cmd, "fact-neuf"):
             touches = [x for x in fichiers if x.startswith(faits)]
+            # UN PROJET LOGÉ PARTAGE SON DÉPÔT : les faits des AUTRES projets (et
+            # ceux de la racine) sont dans le même index, et tout aussi communs.
+            if forme == Forme.Brain and r.prefixe_projet and not r.brain_autonome:
+                touches += [x for x in fichiers if x not in touches
+                            and (x.startswith("brain/fact/") or "/brain/fact/" in x)]
             if touches:
                 return (
                     "mind-guard : ce commit modifie `.fact/` (%s). Ces fichiers sont partagés par "

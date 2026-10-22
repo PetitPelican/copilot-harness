@@ -339,8 +339,13 @@ def juge(d):
 
 
 def main(entree):
+    """La Production, puis la fusion (`fusion`) : deux gardes sur la même charge,
+    en un seul processus — sous Windows chaque démarrage de Python se paie."""
     bas = entree.lower()
-    if "push" not in bas and "merge" not in bas and "api" not in bas:
+    import fusion
+    prod = "push" in bas or "merge" in bas or "api" in bas
+    fus = fusion.concerne(bas)
+    if not prod and not fus:
         return
     import json
     import hote
@@ -348,7 +353,9 @@ def main(entree):
         d = json.loads(entree)
     except (ValueError, RecursionError):
         return
-    motif = juge(d)
+    motif = juge(d) if prod else None
+    if motif is None and fus:
+        motif = fusion.juge(d)
     if motif is not None:
         sys.stdout.write(hote.refus(motif) + "\n")
 

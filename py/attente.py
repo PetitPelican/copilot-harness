@@ -1202,6 +1202,12 @@ def nom_agent(racine):
             # COPILOT, forme compacte : le harnais se place dans `brain/mind/<nom>`.
             if len(rel) == 3 and rel[0] == "brain" and rel[1] == "mind":
                 return rel[2]
+            # Un projet logé : le nom de son profil (`flux-a-ops`), unique dans le
+            # dépôt — deux projets ont chacun leur OPS, et un registre commun des
+            # questions posées les confondrait.
+            if len(rel) > 3 and rel[-3] == "brain" and rel[-2] == "mind":
+                import agent
+                return agent.nom_en(os.path.realpath(racine), p) or rel[-1]
     comp = _composants(p)
     return comp[-1] if comp and comp[-1] != ".." else ""
 

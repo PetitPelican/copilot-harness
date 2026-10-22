@@ -431,9 +431,14 @@ def lancement(p, l, nom_, cps, ins):
     return Lancement(nom_, declare, inscrit, inscrite, trace, deny)
 
 
-def harnais(p, ins):
+def harnais(p, ins, noms=None):
+    """`noms` : les agents à montrer — par défaut ceux de la racine, hors des
+    projets logés, qui ont chacun leur ligne (`scanne`)."""
     p = canon(p)
-    agents = [agent.contexte(p, n) for n in agent.agents_du_projet(p)]
+    if noms is None:
+        loges = agent.loges(p)
+        noms = [n for n in agent.agents_du_projet(p) if n not in loges]
+    agents = [agent.contexte(p, n) for n in noms]
     if not agents:
         dossiers = [(None, p)]
     else:
@@ -553,6 +558,9 @@ def harnais(p, ins):
     h.lancements = [lancement(p, l, n, cps, ins) for (n, l) in dossiers]
     h.oriente = oriente
     logs = os.path.join(p, ".logs")
+    if r.forme == F.Brain and r.prefixe_projet and r.projet is not None:
+        # Un projet logé tient son journal à côté de son code.
+        logs = os.path.join(os.path.dirname(r.projet), ".logs")
     h.logs = len(md_de(logs, "md")) if est_dir(logs) else 0
     h.dispersion = []
     if forme == "equipe":
@@ -778,31 +786,45 @@ def scanne(racine, un_seul):
             continue
         if un_seul and n.lower() != un_seul.lower():
             continue
+        # UN DÉPÔT DE CODE PEUT LOGER PLUSIEURS PROJETS : une ligne chacun, et la
+        # racine seulement si elle porte elle-même une mémoire ou des agents.
+        groupes = {}
+        tous = agent.agents_du_projet(canon(d))
+        for a, (dos, _) in sorted(agent.loges(canon(d)).items()):
+            if a in tous:
+                groupes.setdefault(dos, []).append(a)
         h = harnais(d, ins)
-        # Une seule voix : l'état le plus en difficulté, et les tâches réunies.
-        e, t = {}, []
-        for m in h.minds:
-            x = entete(lis(os.path.join(m, "state.md")))
-            if x and (not e or x.get("sante") == "rouge"):
-                e = x
-            t.extend(taches(lis(os.path.join(m, "todo.md"))))
-        # Le `cap` appartient au PROJET : il vit dans les faits, là où le
-        # résolveur les trouve — avant eux, dans l'état.
-        if h.fact_dir is not None:
-            b = entete(lis(os.path.join(h.fact_dir, "base.md")))
-            e.pop("cap", None)
-            if b.get("cap"):
-                e["cap"] = b["cap"]
-        etat, jours = fraicheur(e.get("maj", ""), aujourdhui)
-        code, conseil = verdict(h)
-        p = Projet()
-        p.nom, p.fraicheur, p.jours, p.verdict, p.conseil = n, etat, jours, code, conseil
-        p.attente = [x for x in t if x.qui and x.qui != DEHORS and x.etat != "fait"]
-        p.encours = len([x for x in t if x.etat == "encours"])
-        p.afaire = len([x for x in t if x.etat == "afaire"])
-        p.harnais, p.champs, p.taches = h, e, t
-        out.append(p)
+        if not groupes or h.forme != "aucune":
+            out.append(_projet(n, h, aujourdhui))
+        for dos in sorted(groupes):
+            out.append(_projet("%s / %s" % (n, dos), harnais(d, ins, groupes[dos]), aujourdhui))
     return out
+
+
+def _projet(n, h, aujourdhui):
+    # Une seule voix : l'état le plus en difficulté, et les tâches réunies.
+    e, t = {}, []
+    for m in h.minds:
+        x = entete(lis(os.path.join(m, "state.md")))
+        if x and (not e or x.get("sante") == "rouge"):
+            e = x
+        t.extend(taches(lis(os.path.join(m, "todo.md"))))
+    # Le `cap` appartient au PROJET : il vit dans les faits, là où le
+    # résolveur les trouve — avant eux, dans l'état.
+    if h.fact_dir is not None:
+        b = entete(lis(os.path.join(h.fact_dir, "base.md")))
+        e.pop("cap", None)
+        if b.get("cap"):
+            e["cap"] = b["cap"]
+    etat, jours = fraicheur(e.get("maj", ""), aujourdhui)
+    code, conseil = verdict(h)
+    p = Projet()
+    p.nom, p.fraicheur, p.jours, p.verdict, p.conseil = n, etat, jours, code, conseil
+    p.attente = [x for x in t if x.qui and x.qui != DEHORS and x.etat != "fait"]
+    p.encours = len([x for x in t if x.etat == "encours"])
+    p.afaire = len([x for x in t if x.etat == "afaire"])
+    p.harnais, p.champs, p.taches = h, e, t
+    return p
 
 
 def symbole(v):

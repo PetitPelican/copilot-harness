@@ -294,6 +294,10 @@ def _valeur(args, cle):
 
 
 def main(args):
+    if "--projet" in args:
+        # UN PROJET LOGÉ DANS UN SOUS-DOSSIER DU DÉPÔT DE CODE : voir `loge`.
+        import loge
+        return loge.main(args)
     import agent
     import copilot
     import equipe
