@@ -77,6 +77,8 @@ POSER LE HARNAIS SUR UN PROJET — le seul geste à connaître pour démarrer :
   adopte       pose la mémoire du projet et branche le paquet.
                `--go` pour écrire · `--equipe A,B,C [--modeles ops,po,qa] [--code D]` :
                une équipe neuve, un dossier par agent
+               `--projet DOSSIER --equipe A,B --nom COURT [--depuis-racine]` : un projet
+               logé dans un sous-dossier du dépôt de code, sa mémoire à côté de son code
   brain-migre  déplace une mémoire de l'ancienne organisation vers `brain/`
   mise-a-niveau  amène un projet à la forme actuelle, mono ou équipe : mémoire en `brain/`,
                droits réécrits, faits manquants, `outputs/` -> `assets/` ; sans rien perdre
@@ -114,7 +116,9 @@ APPELÉES PAR LE HARNAIS (chacune lit sa charge JSON sur l'entrée standard) :
   equipe-amorce  crée le carnet d'équipe — appelé UNE fois, à la conversion
   mind-guard PreToolUse/Bash — garde les faits et la déclaration d'état
   perimetre   PreToolUse/Edit|Write — refuse les écritures hors lot
-  production  PreToolUse/Bash — rien ne part en Production sans laissez-passer
+  production  PreToolUse/Bash — rien ne part en Production sans laissez-passer ;
+              puis `fusion` : récupérer avant de pousser ou fusionner, et une
+              résolution de conflit ne perd aucune ligne de la mémoire
   coffre      PreToolUse/Bash, Read, Grep — aucun outil n'affiche une valeur de secret
   coffre-temoin  PostToolUse — une clé de forme connue passée en clair se signale
   consignes   PreToolUse/Edit|Write|Bash — seuls les gardiens (le CTO) écrivent AGENTS.md,

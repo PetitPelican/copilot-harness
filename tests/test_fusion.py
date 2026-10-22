@@ -98,7 +98,8 @@ class RecupererDabord(DeuxCopies):
         self.assertIn("origin/main", m)
         self.assertIn(TODO, m)
         self.assertIsNotNone(self.garde("git merge feature"))
-        self.assertIsNotNone(self.garde("cd %s && git push origin HEAD:refs/for/main" % self.b, ou=self.d))
+        # Depuis un autre dossier, par `cd` : la garde suit la copie où git tourne.
+        self.assertIsNotNone(self.garde("cd b && git push origin HEAD:refs/for/main", ou=self.d))
 
     def test_pousser_a_jour_passe(self):
         self.sh(self.a, "git", "fetch", "-q")

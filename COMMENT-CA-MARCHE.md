@@ -208,6 +208,30 @@ d'instructions par chemin (`.github/instructions/*.instructions.md`), que ce dé
 ne documente pas ; les profils `.github/agents/*.agent.md` sont déjà fermés aux
 agents par leur périmètre.
 
+**La fusion (`fusion`, 2.2.0, jouée dans le même processus que `production`).**
+Quand la mémoire voyage avec le code, deux personnes qui pilotent chacune un agent
+du même projet écrivent dans les mêmes fichiers. Deux règles, dans un dépôt qui a
+un distant et qui porte une mémoire :
+
+- **récupérer d'abord** : `git push`, `git merge <branche>` et `git rebase <base>`
+  sont refusés si le dernier `git fetch` date de plus de 15 minutes, ou si la
+  branche suivie a des commits que la copie n'a pas intégrés (le refus nomme les
+  fichiers de mémoire concernés). `git pull` récupère de lui-même et passe ;
+- **rien perdu en résolvant** : pendant une fusion, un rebase ou un cherry-pick
+  arrêté sur conflit, `git commit` et `--continue` sont refusés si la résolution
+  indexée d'un fichier de `brain/fact/` ou `brain/mind/` (à toute profondeur) perd
+  une ligne écrite par l'un des deux côtés et retirée par aucun, ou garde un
+  marqueur de conflit. Chaque côté est lu contre la base commune : une tâche
+  cochée remplace l'ancienne sans l'exiger ; `maj:`, `sante:` et `jalon:`
+  n'existent qu'une fois et ne comptent pas.
+
+` # fusion-ok` lève les deux règles (hors réseau, ou une ligne abandonnée exprès).
+Le briefing ajoute une ligne `partage:` quand la branche suivie a avancé sans la
+copie, lue sur les références locales, sans réseau. Les journaux `.logs/` d'un
+projet logé se fusionnent sans conflit (`merge=union`, posé par `adopte --projet`).
+Non couverts : un client graphique, un alias, une fusion sans conflit (Git ne
+perd rien ligne à ligne).
+
 ## 5. Les cinq gardes de fin de tour
 
 C'est le cœur. Au moment où l'agent s'apprête à rendre la main, cinq questions
@@ -550,6 +574,63 @@ un processus, chemins longs, antivirus) n'est éprouvé que par simulation de `o
 par des chaînes de chemins ; un gros projet réel n'a pas été déménagé.
 
 ---
+
+### 8 ter. Plusieurs projets dans un même dépôt de code (2.2.0)
+
+Un dépôt de code héberge parfois plusieurs projets, chacun dans son dossier. Une
+mémoire à la racine les mêlerait ; un dépôt de mémoire à part ajouterait un dépôt
+à synchroniser. La mémoire de chaque projet vit donc **à côté de son code**, et se
+partage par push et pull, comme lui :
+
+```text
+.github/agents/<court>-<rôle>.agent.md          profil ET rôle, marqué du dossier du projet
+.github/copilot/perimetres/<court>-<rôle>.json  périmètre de l'agent
+<dossier>/brain/fact/                           faits du projet (+ roles.md)
+<dossier>/brain/mind/<rôle>/state.md, todo.md   état de chaque agent
+<dossier>/assets/<rôle>/                        livrables
+<dossier>/docs/decisions.md                     le daté
+<dossier>/.logs/                                journal des commits (fusionné par union)
+```
+
+L'app ne lit les profils, les réglages et la méthode qu'à la racine git : la
+session s'ouvre à la racine, et **le profil choisi dans le menu désigne le
+projet**. Il le dit dans son corps, par une marque que l'app transmet au modèle
+sans l'interpréter (une clé inconnue dans l'en-tête risquerait de faire écarter
+le profil) :
+
+```text
+<!-- harnais:projet dossier="services/flux-a" esprit="OPS" -->
+```
+
+Le harnais se place alors dans `<dossier>/brain/mind/<esprit>/` : briefing,
+garde de commit, journal, fin de tour et vue d'équipe suivent ce projet. Le nom
+de l'agent est celui du profil (`flux-a-ops`) : deux projets ont chacun leur OPS
+sans se confondre. Lancé en CLI depuis un sous-dossier d'un projet, le harnais
+trouve aussi sa mémoire en remontant jusqu'au premier `brain/`.
+
+**Le périmètre** d'un agent de projet logé porte une liste `allow` : son dossier de
+projet. Il n'écrit ni dans le code d'un autre projet ni à la racine, sauf entrée
+ajoutée à cette liste ; `deny` garde la mémoire et les livrables de ses pairs, les
+faits (un seul écrivain, QA sur accord humain) et les fichiers du harnais. Les
+faits des autres projets du dépôt sont verrouillés par la garde de commit comme
+les siens (` # fact-ok`).
+
+```powershell
+# À la racine du dépôt de code — à blanc, puis --go.
+harnais adopte --projet services\flux-a --equipe OPS,PO,QA --nom flux-a
+# Une mémoire brain\ déjà commitée à la racine descend dans le projet :
+harnais adopte --projet services\flux-a --equipe OPS,PO,QA --nom flux-a --depuis-racine
+```
+
+`--depuis-racine` déplace `brain\` et les `assets\<rôle>\` nommés par `git mv`
+(l'historique suit), renomme les profils et périmètres de racine en
+`<court>-<rôle>`, ajoute leur marque et descend leurs chemins ; rien n'est
+supprimé, et une mémoire déjà présente dans le projet arrête tout.
+
+**Le paquet ne se déclare pas dans le dépôt partagé** : `.github\copilot\settings.json`
+porterait le chemin du paquet sur un poste, faux sur celui d'à côté. `adopte
+--projet` ne l'écrit pas et vérifie l'inscription utilisateur que pose
+`install.ps1` ; il signale un fichier de réglages déjà présent.
 
 ## 9. Travailler à plusieurs agents dans l'app GitHub Copilot — la méthode
 

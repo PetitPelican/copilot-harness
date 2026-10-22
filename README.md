@@ -263,6 +263,34 @@ Un `CLAUDE.md` existant est aussi lu par Copilot : ne pas ajouter
 un `AGENTS.md` contradictoire. Une mémoire ancienne `.fact`/`.mind`
 doit être migrée avec `brain-migre` avant de compléter `brain`.
 
+## Plusieurs projets dans un même dépôt de code (2.2.0)
+
+Quand un dépôt de code héberge plusieurs projets, chacun dans son dossier, chaque
+projet garde sa mémoire à côté de son code et la partage par push et pull, sans
+dépôt de plus. Depuis la racine du dépôt :
+
+```powershell
+harnais adopte --projet services\flux-a --equipe OPS,PO,QA --nom flux-a        # à blanc
+harnais adopte --projet services\flux-a --equipe OPS,PO,QA --nom flux-a --go
+```
+
+La mémoire va dans `services\flux-a\brain\`, les livrables dans
+`services\flux-a\assets\<rôle>\`, le journal dans `services\flux-a\.logs\` ; les
+profils `flux-a-ops`, `flux-a-po`, `flux-a-qa` et leurs périmètres restent à la
+racine, seul endroit où l'app les lit. On ouvre la session à la racine et on
+choisit le profil dans le menu : c'est lui qui désigne le projet. Chaque agent
+n'écrit que dans son dossier de projet. `--depuis-racine` descend dans le projet
+une mémoire `brain\` déjà commitée à la racine (`git mv`, historique conservé).
+
+Le paquet **ne se déclare pas** dans ce dépôt partagé : `.github\copilot\settings.json`
+porterait un chemin propre à un poste. Chacun s'appuie sur l'inscription
+utilisateur que pose `install.ps1` ; `adopte --projet` la vérifie et le dit.
+
+Deux personnes sur le même projet : la garde `fusion` refuse de pousser ou de
+fusionner sans avoir récupéré (`git fetch`) et intégré le travail de l'autre, et
+refuse une résolution de conflit qui perd des lignes de l'état, des tâches ou des
+faits (section 4 bis de [COMMENT-CA-MARCHE](COMMENT-CA-MARCHE.md)).
+
 ## Amener un projet existant à la forme actuelle
 
 Deux outils, à blanc par défaut : ils disent tout ce qu'ils feraient et n'écrivent

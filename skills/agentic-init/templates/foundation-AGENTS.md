@@ -207,6 +207,23 @@ et valider les sessions avant d'archiver les anciens dossiers.
 `harnais equipe --agents A,B --compact` convertit un mono adopté ; les ajouts
 à une équipe compacte conservent cette forme.
 
+**Plusieurs projets dans un même dépôt de code (2.2.0).** Chaque projet garde sa
+mémoire à côté de son code : `<dossier>/brain/fact/`, `<dossier>/brain/mind/<rôle>/`,
+ses livrables dans `<dossier>/assets/<rôle>/`, son journal dans `<dossier>/.logs/`.
+La session s'ouvre à la racine du dépôt (l'app n'y lit les profils qu'à cet
+endroit) ; le profil choisi dans le menu, `<projet>-<rôle>`, désigne le projet
+par sa marque `<!-- harnais:projet dossier="…" esprit="…" -->`. Le périmètre d'un
+tel agent n'autorise que son dossier de projet, hors de la mémoire et des
+livrables de ses pairs. `harnais adopte --projet <dossier> --equipe A,B --nom
+<court>` pose cette forme ; `--depuis-racine` y descend une mémoire `brain/` de
+racine. Le paquet ne se déclare pas dans un dépôt partagé : l'inscription
+utilisateur faite à l'installation suffit.
+
+**La mémoire voyage avec le code.** Récupérer (`git fetch`) et intégrer le travail
+des autres AVANT de pousser ou de fusionner ; une résolution de conflit garde les
+lignes des deux côtés dans l'état, les tâches et les faits — une tâche avancée des
+deux côtés se tranche en gardant la plus avancée. La garde `fusion` le tient.
+
 **L'organisation décrite ci-dessous est l'architecture historique, encore
 prise en charge.** Ses dossiers `agents/<nom>/` ne sont pas requis en compact.
 
@@ -364,6 +381,14 @@ Deux autres regardent les commandes shell.
   pas celui du disque. Échappatoire : ` # mind-ok` en fin de commande. C'est
   l'exception au fail-open : si le programme du paquet ne répond pas, il
   **refuse** la commande plutôt que de la laisser passer sans contrôle.
+- **`fusion`** (`preToolUse` / `PreToolUse`, joué avec la garde de la Production) —
+  dans un dépôt qui a un distant et qui porte la mémoire, refuse `git push`,
+  `git merge` et `git rebase` quand le dernier `git fetch` a plus de 15 minutes ou
+  que la branche suivie a des commits non intégrés ; refuse la suite d'une fusion,
+  d'un rebase ou d'un cherry-pick arrêté sur conflit quand la résolution indexée
+  d'un fichier de `brain/fact/` ou `brain/mind/` perd une ligne qu'un des deux
+  côtés avait écrite, ou garde un marqueur de conflit. Échappatoire :
+  ` # fusion-ok` en fin de commande.
 - **`journal`** (`postToolUse` / `PostToolUse`) — écrit dans `.logs/<jour>.md`. Il regarde
   `HEAD`, pas le retour de la commande : un commit échoué n'écrit rien, un
   double appel ne crée pas deux entrées.
