@@ -289,7 +289,15 @@ utilisateur que pose `install.ps1` ; `adopte --projet` la vérifie et le dit.
 Deux personnes sur le même projet : la garde `fusion` refuse de pousser ou de
 fusionner sans avoir récupéré (`git fetch`) et intégré le travail de l'autre, et
 refuse une résolution de conflit qui perd des lignes de l'état, des tâches ou des
-faits (section 4 bis de [COMMENT-CA-MARCHE](COMMENT-CA-MARCHE.md)).
+faits (section 4 bis de [COMMENT-CA-MARCHE](COMMENT-CA-MARCHE.md)). Après un pull
+qui apporte des commits d'un autre auteur dans la mémoire du projet, le briefing
+suivant le dit en une ligne : qui, combien de commits, quels fichiers — à relire
+avant d'agir.
+
+`brain\poids.json` (les compteurs de lecture des faits) reste hors de Git dans un
+projet logé : réécrit sur chaque poste, il ferait un conflit à chaque pull.
+`adopte --projet` l'ajoute au `.gitignore` du projet et le sort de l'index s'il y
+était ; le fichier reste sur le disque, chaque poste tient le sien.
 
 ## Amener un projet existant à la forme actuelle
 

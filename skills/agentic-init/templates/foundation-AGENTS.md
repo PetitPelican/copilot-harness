@@ -223,6 +223,9 @@ utilisateur faite à l'installation suffit.
 des autres AVANT de pousser ou de fusionner ; une résolution de conflit garde les
 lignes des deux côtés dans l'état, les tâches et les faits — une tâche avancée des
 deux côtés se tranche en gardant la plus avancée. La garde `fusion` le tient.
+Quand le briefing dit `arrivé :`, un autre a changé la mémoire du projet : relire
+les fichiers qu'il nomme et les intégrer AVANT d'agir. Dans un projet logé,
+`brain/poids.json` reste hors de Git : chaque poste tient ses compteurs.
 
 **L'organisation décrite ci-dessous est l'architecture historique, encore
 prise en charge.** Ses dossiers `agents/<nom>/` ne sont pas requis en compact.
@@ -396,7 +399,7 @@ Deux autres regardent les commandes shell.
 - **`lecture`** (`postToolUse` / `PostToolUse`, sur `Read` et `Bash`) — note
   quelles **sections** de `brain/fact/` l'agent lit (une lecture partielle ne
   crédite que les sections qu'elle couvre). Leur confiance vit dans
-  **`brain/poids.json`**, commité : elle part du niveau d'établissement (mesuré
+  **`brain/poids.json`**, commité (ignoré dans un projet logé) : elle part du niveau d'établissement (mesuré
   80, dit 85, observé 60, supposé 40), et les résultats la font bouger — une
   garde qui mord, un constat qui tient, un constat démenti — pour les seules
   sections lues depuis le verdict précédent. Le briefing signale les sections

@@ -223,7 +223,7 @@ class Arrivees(DeuxCopies):
         self.sh(self.a, "git", "pull", "-q", "--rebase")
         self.ajoute(self.a, chemin, ligne)
         self.sh(self.a, "git", "add", "-A")
-        self.sh(self.a, "git", "commit", "-q", "--author", "Alice <alice@x>", "-m", message)
+        self.sh(self.a, "git", "commit", "-q", "--author", "Autre <autre@x>", "-m", message)
         self.sh(self.a, "git", "push", "-q")
 
     def test_un_pull_qui_apporte_la_memoire_est_dit_une_fois(self):
@@ -232,7 +232,7 @@ class Arrivees(DeuxCopies):
         self.pousse_de_a("svc/flux_a/.logs/2026-10-22.md", "- A a travaillé\n", "A2")
         self.sh(self.b, "git", "pull", "-q", "--rebase")
         t = self.briefing("s1", "UserPromptSubmit")
-        self.assertIn("arrivé : 2 commit(s) de Alice", t)
+        self.assertIn("arrivé : 2 commit(s) de Autre", t)
         self.assertIn("brain/mind/OPS/todo.md", t)
         self.assertIn(".logs/2026-10-22.md", t)
         self.assertNotIn("svc/flux_a/brain", t.split("arrivé :")[1].split("\n")[0])
@@ -245,14 +245,14 @@ class Arrivees(DeuxCopies):
         self.briefing("s1", "UserPromptSubmit")
         self.pousse_de_a("svc/flux_a/.logs/2026-10-22.md", "- A a travaillé\n", "A")
         self.sh(self.b, "git", "pull", "-q", "--rebase")
-        self.assertIn("arrivé : 1 commit(s) de Alice", self.briefing("s1", "UserPromptSubmit"))
+        self.assertIn("arrivé : 1 commit(s) de Autre", self.briefing("s1", "UserPromptSubmit"))
 
     def test_le_code_seul_ou_mes_propres_commits_ne_sont_pas_annonces(self):
         # Témoin 1 : A ne touche que le code.
         self.pousse_de_a("svc/flux_a/a.py", "b = 2\n", "code")
         # Témoin 2 : B écrit dans la mémoire, sous son nom.
         self.ajoute(self.b, "svc/flux_a/brain/mind/PO/todo.md", "- [ ] tâche de B !bas\n")
-        self.sh(self.b, "git", "commit", "-q", "--author", "Bob <b@b>", "-am", "B")
+        self.sh(self.b, "git", "commit", "-q", "--author", "Moi <b@b>", "-am", "B")
         self.sh(self.b, "git", "pull", "-q", "--rebase")
         self.assertNotIn("arrivé :", self.briefing("s1"))
 

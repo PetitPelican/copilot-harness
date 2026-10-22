@@ -227,7 +227,13 @@ un distant et qui porte une mémoire :
 
 ` # fusion-ok` lève les deux règles (hors réseau, ou une ligne abandonnée exprès).
 Le briefing ajoute une ligne `partage:` quand la branche suivie a avancé sans la
-copie, lue sur les références locales, sans réseau. Les journaux `.logs/` d'un
+copie, lue sur les références locales, sans réseau. Après un pull ou une fusion
+qui apporte des commits d'un AUTRE auteur (adresse git différente de celle de la
+copie) dans `brain/fact/`, `brain/mind/` ou `.logs/` du projet, le briefing
+suivant ajoute une ligne `arrivé :` — les auteurs, le nombre de commits, les
+fichiers — et demande de relire et d'intégrer avant d'agir. Un curseur par agent,
+dans le dossier d'état, retient la dernière tête lue : la ligne part une fois, et
+le premier passage n'annonce pas l'historique. Les journaux `.logs/` d'un
 projet logé se fusionnent sans conflit (`merge=union`, posé par `adopte --projet`).
 Non couverts : un client graphique, un alias, une fusion sans conflit (Git ne
 perd rien ligne à ligne).
@@ -356,7 +362,7 @@ couvre ; une lecture par le shell arrive sous `Bash`, la commande en clair.
 
 | Fichier | Contenu | Durée de vie |
 |---|---|---|
-| `brain/poids.json` (commité) | par section : `conf`, `jours_lus`, `vu`, `verdicts` | suit le projet, ses worktrees et ses agents |
+| `brain/poids.json` (commité ; ignoré dans un projet logé) | par section : `conf`, `jours_lus`, `vu`, `verdicts` | suit le projet, ses worktrees et ses agents ; dans un projet logé, reste sur le poste |
 | registre de session (dossier d'état) | les sections lues depuis le dernier verdict | vidé à chaque résultat |
 
 La confiance part du niveau (mesuré 80, dit 85, observé 60, supposé 40, inconnu
@@ -590,6 +596,7 @@ partage par push et pull, comme lui :
 <dossier>/assets/<rôle>/                        livrables
 <dossier>/docs/decisions.md                     le daté
 <dossier>/.logs/                                journal des commits (fusionné par union)
+<dossier>/brain/poids.json                      compteurs de lecture, hors de Git (un par poste)
 ```
 
 L'app ne lit les profils, les réglages et la méthode qu'à la racine git : la
