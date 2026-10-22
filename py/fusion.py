@@ -26,6 +26,11 @@ DEUX RÈGLES.
    s'additionne pas. Les lignes d'en-tête qui n'existent qu'une fois (`maj:`,
    `sante:`, `jalon:`) ne comptent pas : l'une des deux doit gagner.
 
+3. DIRE CE QUI EST ARRIVÉ (2.2.1). Après un pull ou une fusion qui apporte des
+   commits d'autres auteurs dans la mémoire du projet (`brain/fact/`,
+   `brain/mind/`, `.logs/`), le briefing suivant le dit en une ligne — qui,
+   combien de commits, quels fichiers — et demande de relire avant d'agir.
+
 ` # fusion-ok` en fin de commande lève les deux règles — hors réseau, ou une ligne
 volontairement abandonnée — et reste dans l'historique du shell.
 
@@ -359,3 +364,116 @@ def ligne_briefing(depart):
     dont = (", dont %d fichier(s) de la mémoire" % len(mem)) if mem else ""
     return ("partage: `%s` a %d commit(s) que tu n'as pas%s — `git pull --rebase` avant de "
             "travailler." % (suivie, n, dont))
+
+
+# ── ce que les autres ont apporté ────────────────────────────────────────
+#
+# Le curseur est la dernière tête que le briefing a lue, par agent, dans le
+# dossier d'état du paquet. Ce qui est entre lui et HEAD, écrit par un autre
+# auteur que celui de cette copie et touchant la mémoire du projet, est
+# « arrivé ». Le premier passage pose le curseur sans rien annoncer : tout
+# l'historique n'est pas une arrivée.
+
+def _etat_arrivees(depart):
+    import briefing
+    return os.path.join(os.path.dirname(briefing.etat_du_briefing(depart)), "arrivees.json")
+
+
+def _lis_etat(f):
+    import json
+    try:
+        with open(f, encoding="utf-8") as h:
+            v = json.load(h)
+    except (OSError, ValueError):
+        return {}
+    return v if isinstance(v, dict) else {}
+
+
+def _ecris_etat(f, v):
+    import json
+    try:
+        os.makedirs(os.path.dirname(f), exist_ok=True)
+        with open(f, "w", encoding="utf-8", newline="") as h:
+            json.dump(v, h)
+    except OSError:
+        pass
+
+
+def arrivees(depart):
+    """`(jeton, ligne)`. Le jeton entre dans l'empreinte du briefing : il ne
+    change QUE quand une arrivée est à annoncer, et reste ensuite celui de la
+    dernière annonce — sans quoi la disparition de la ligne referait un briefing.
+    La ligne est None quand rien n'est arrivé. Hors d'une mémoire `brain/`
+    versionnée avec le code : `(None, None)`."""
+    import memoire
+    r = memoire.resous(depart)
+    if r.forme != memoire.Forme.Brain or r.brain_autonome or not r.fact:
+        return None, None
+    top = _git(depart, ["rev-parse", "--show-toplevel"])
+    head = _git(depart, ["rev-parse", "--verify", "-q", "HEAD"])
+    if not top or not head:
+        return None, None
+    top, head = top.strip(), head.strip()
+    f = _etat_arrivees(depart)
+    e = _lis_etat(f)
+    curseur = e.get("curseur") if isinstance(e.get("curseur"), str) else None
+    annonce = e.get("annonce") if isinstance(e.get("annonce"), str) else ""
+    if curseur == head:
+        return annonce or None, None
+    vus = _arrivees_entre(top, r, curseur, head) if curseur else None
+    if not vus:
+        _ecris_etat(f, {"curseur": head, "annonce": annonce})
+        return annonce or None, None
+    auteurs, n, fichiers = vus
+    return head, ("arrivé : %d commit(s) de %s ont changé la mémoire du projet depuis ta dernière "
+                  "lecture — %s. Relis ces fichiers et intègre-les (état, tâches, faits) AVANT d'agir."
+                  % (n, ", ".join(auteurs), _echantillon(fichiers, 5)))
+
+
+def acquitte(depart, jeton):
+    """Le briefing qui portait la ligne est servi : le curseur avance."""
+    if jeton:
+        _ecris_etat(_etat_arrivees(depart), {"curseur": jeton, "annonce": jeton})
+
+
+def _arrivees_entre(top, r, de, a):
+    """`([auteurs], n commits, [fichiers vus depuis le projet])` des commits
+    d'autres auteurs qui touchent la mémoire, ou None."""
+    brain = os.path.dirname(r.fact)
+    projet = os.path.dirname(brain)
+
+    def depuis_top(p):
+        try:
+            x = os.path.relpath(os.path.realpath(p), os.path.realpath(top)).replace("\\", "/")
+        except ValueError:
+            return None
+        return None if x.startswith("..") else x
+
+    rel = depuis_top(projet)
+    if rel is None:
+        return None
+    pre = "" if rel == "." else rel + "/"
+    # Chemins vus du sommet du dépôt : un chemin absolu passé par un lien
+    # symbolique serait « hors du dépôt » pour git, et la ligne se tairait.
+    chemins = [":(top)" + pre + x for x in ("brain/fact/", "brain/mind/", ".logs/")]
+    moi = (_git(top, ["config", "user.email"]) or "").strip().lower()
+    t = _git(top, ["log", "--no-merges", "--format=%x00%an%x01%ae", "--name-only",
+                   "%s..%s" % (de, a), "--"] + chemins)
+    if t is None:
+        return None
+    auteurs, fichiers, n = [], [], 0
+    for bloc in t.split("\x00")[1:]:
+        lignes = bloc.split("\n")
+        nom, _, mail = lignes[0].partition("\x01")
+        if moi and mail.strip().lower() == moi:
+            continue
+        n += 1
+        if nom not in auteurs:
+            auteurs.append(nom)
+        for x in lignes[1:]:
+            x = x.strip()
+            if x:
+                x = x[len(pre):] if pre and x.startswith(pre) else x
+                if x not in fichiers:
+                    fichiers.append(x)
+    return (auteurs, n, fichiers) if n else None

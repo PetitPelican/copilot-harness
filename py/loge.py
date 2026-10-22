@@ -44,7 +44,10 @@ D = "\x1b[2m"
 X = "\x1b[0m"
 
 UNION = ".logs/*.md merge=union"
-IGNORE = "brain/workspace/"
+# `poids.json` compte les lectures de CE poste : réécrit au premier passage de
+# chaque jour sur chaque section, il ferait un conflit à chaque pull entre deux
+# personnes, et ses compteurs n'ont rien à faire dans la revue du code.
+IGNORE = ("brain/workspace/", "brain/poids.json")
 
 
 def _p(s=""):
@@ -284,8 +287,8 @@ def main(args):
             pose(pg, equipe.json_compact(perimetre(rel, a, roles)) + "\n", "périmètre de %s" % a)
 
     ajouts = []   # [(chemin, texte complet, quoi)]
-    for f, ligne, quoi in ((j(P, ".gitattributes"), UNION, "journaux fusionnés sans conflit"),
-                           (j(P, ".gitignore"), IGNORE, "le carnet d'équipe reste local")):
+    for f, lignes, quoi in ((j(P, ".gitattributes"), (UNION,), "journaux fusionnés sans conflit"),
+                            (j(P, ".gitignore"), IGNORE, "le carnet d'équipe et les poids restent locaux")):
         try:
             avant = equipe.lis(f)
         except FileNotFoundError:
@@ -293,9 +296,15 @@ def main(args):
         except (OSError, UnicodeDecodeError) as e:
             _e("adopte : %s : %s" % (f, equipe.err_es(e)))
             return 1
-        t = _ajoute_ligne(avant, ligne)
-        if t is not None:
+        t = avant
+        for ligne in lignes:
+            t = _ajoute_ligne(t, ligne) or t
+        if t != avant:
             ajouts.append((f, t, quoi))
+    # Déjà suivi (une mémoire de racine qui descend, un projet logé en 2.2.0) :
+    # l'ignorer ne suffit pas, il sort de l'index — le fichier reste sur le disque.
+    poids = j(brain, "poids.json")
+    poids_suivi = _suivi(racine, poids) or (migre and _suivi(racine, j(racine, "brain", "poids.json")))
     inf = j(racine, ".github", "copilot-instructions.md")
     try:
         texte = adopte.instructions(inf, racine)
@@ -318,7 +327,11 @@ def main(args):
         _p("  %sÀ POSER (%d)%s" % (B, len(poser) + len(ajouts), X))
         for p, _, quoi in poser + ajouts:
             _p("    %-44s %s%s%s" % (c_(p), D, quoi, X))
-    if not (deplacements or retouches or poser or ajouts):
+    if poids_suivi:
+        _p("  %sSORT DE GIT (1)%s" % (B, X))
+        _p("    %-44s %sles compteurs de lecture de chaque poste, gardés sur le disque%s"
+           % (c_(poids), D, X))
+    if not (deplacements or retouches or poser or ajouts or poids_suivi):
         _p("  %sCe projet est déjà au harnais.%s Rien à poser." % (V, X))
 
     _p("\n  %sLE PAQUET%s" % (B, X))
@@ -357,6 +370,8 @@ def main(args):
             equipe.git(racine, ["add", "--", cible])
         else:
             os.remove(vieux)
+    if poids_suivi and _suivi(racine, poids):
+        equipe.git(racine, ["rm", "-q", "--cached", "--", poids])
     n = 0
     for p, contenu, _ in poser:
         os.makedirs(os.path.dirname(p), exist_ok=True)

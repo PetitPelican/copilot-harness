@@ -58,6 +58,7 @@ class DeuxCopies(unittest.TestCase):
             h.write(t)
 
     def ajoute(self, ou, p, t):
+        os.makedirs(os.path.dirname(os.path.join(ou, *p.split("/"))), exist_ok=True)
         with open(os.path.join(ou, *p.split("/")), "a", encoding="utf-8") as h:
             h.write(t)
 
@@ -193,6 +194,67 @@ class Briefing(DeuxCopies):
                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         # Le témoin : A a tout intégré — aucun retard à signaler.
         self.assertNotIn("commit(s) que tu n'as pas", r.stdout.decode("utf-8"))
+
+
+class Arrivees(DeuxCopies):
+    """Le briefing dit ce que les autres ont apporté — une fois, au bon moment."""
+
+    def briefing(self, session="s", evenement="SessionStart"):
+        j = os.path.join(self.d, "journal.jsonl")
+        with open(j, "w") as h:
+            h.write(json.dumps({"type": "subagent.selected", "data": {"agentName": "flux-a-ops"}}) + "\n")
+        c = {"hook_event_name": evenement, "session_id": session, "transcript_path": j, "cwd": self.b}
+        r = subprocess.run([sys.executable, MAIN, "briefing"], cwd=self.b, input=json.dumps(c).encode(),
+                           env=_env(self.d, COPILOT_PROJECT_DIR=self.b, PYTHONIOENCODING="utf-8"),
+                           stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        self.assertEqual(r.returncode, 0, r.stderr.decode())
+        t = r.stdout.decode("utf-8").strip()
+        return json.loads(t)["additionalContext"] if t else ""
+
+    def setUp(self):
+        super().setUp()
+        # B n'est pas l'auteur de A : chaque copie a son identité.
+        self.sh(self.b, "git", "config", "user.email", "b@b")
+        self.sh(self.b, "git", "reset", "-q", "--hard", "HEAD~1")    # B n'a rien écrit…
+        self.sh(self.b, "git", "pull", "-q", "--rebase")              # … et a tout intégré
+        self.premier = self.briefing("s0")                             # le curseur est posé
+
+    def pousse_de_a(self, chemin, ligne, message):
+        self.sh(self.a, "git", "pull", "-q", "--rebase")
+        self.ajoute(self.a, chemin, ligne)
+        self.sh(self.a, "git", "add", "-A")
+        self.sh(self.a, "git", "commit", "-q", "--author", "Alice <alice@x>", "-m", message)
+        self.sh(self.a, "git", "push", "-q")
+
+    def test_un_pull_qui_apporte_la_memoire_est_dit_une_fois(self):
+        self.assertNotIn("arrivé :", self.premier, "le premier passage n'annonce pas l'historique")
+        self.pousse_de_a(TODO, "- [ ] encore A !haut\n", "A1")
+        self.pousse_de_a("svc/flux_a/.logs/2026-10-22.md", "- A a travaillé\n", "A2")
+        self.sh(self.b, "git", "pull", "-q", "--rebase")
+        t = self.briefing("s1", "UserPromptSubmit")
+        self.assertIn("arrivé : 2 commit(s) de Alice", t)
+        self.assertIn("brain/mind/OPS/todo.md", t)
+        self.assertIn(".logs/2026-10-22.md", t)
+        self.assertNotIn("svc/flux_a/brain", t.split("arrivé :")[1].split("\n")[0])
+        # Une fois : au message suivant, rien n'a changé — pas de second briefing.
+        self.assertEqual(self.briefing("s1", "UserPromptSubmit"), "")
+        # Et une nouvelle session ne la redit pas : elle a été lue.
+        self.assertNotIn("arrivé :", self.briefing("s2"))
+
+    def test_seuls_les_journaux_suffisent_a_relancer_le_briefing(self):
+        self.briefing("s1", "UserPromptSubmit")
+        self.pousse_de_a("svc/flux_a/.logs/2026-10-22.md", "- A a travaillé\n", "A")
+        self.sh(self.b, "git", "pull", "-q", "--rebase")
+        self.assertIn("arrivé : 1 commit(s) de Alice", self.briefing("s1", "UserPromptSubmit"))
+
+    def test_le_code_seul_ou_mes_propres_commits_ne_sont_pas_annonces(self):
+        # Témoin 1 : A ne touche que le code.
+        self.pousse_de_a("svc/flux_a/a.py", "b = 2\n", "code")
+        # Témoin 2 : B écrit dans la mémoire, sous son nom.
+        self.ajoute(self.b, "svc/flux_a/brain/mind/PO/todo.md", "- [ ] tâche de B !bas\n")
+        self.sh(self.b, "git", "commit", "-q", "--author", "Bob <b@b>", "-am", "B")
+        self.sh(self.b, "git", "pull", "-q", "--rebase")
+        self.assertNotIn("arrivé :", self.briefing("s1"))
 
 
 if __name__ == "__main__":

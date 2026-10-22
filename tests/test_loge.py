@@ -258,6 +258,20 @@ class Migration(Banc):
         rc, out, _ = self.harnais("agent", "--racine", self.depot, "--journal", self.journal("flux-a-ops"))
         self.assertIn("actif   : flux-a-ops", out)
 
+    def test_les_poids_descendent_hors_de_git(self):
+        with open(os.path.join(self.depot, "brain", "poids.json"), "w") as h:
+            h.write("{}\n")
+        self.git("add", "-A")
+        self.git("commit", "-qm", "poids")
+        out = self.adopte("svc/flux_a", "OPS", "flux-a", "--depuis-racine")
+        self.assertIn("SORT DE GIT", out)
+        self.assertTrue(os.path.isfile(os.path.join(self.depot, "svc", "flux_a", "brain", "poids.json")),
+                        "le fichier reste sur le disque")
+        self.assertEqual(self.git("ls-files", "--", "svc/flux_a/brain/poids.json", "brain/poids.json"), "")
+        self.assertIn("brain/poids.json", self.lis("svc", "flux_a", ".gitignore").splitlines())
+        self.git("add", "-A")
+        self.assertEqual(self.git("status", "--porcelain", "--", "svc/flux_a/brain/poids.json"), "")
+
     def test_une_memoire_deja_dans_le_projet_n_est_pas_ecrasee(self):
         os.makedirs(os.path.join(self.depot, "svc", "flux_a", "brain", "fact"))
         rc, _, err = self.harnais("adopte", "--projet", "svc/flux_a", "--equipe", "OPS",

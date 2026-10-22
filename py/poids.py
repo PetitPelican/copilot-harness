@@ -13,7 +13,10 @@ DEUX ÉTATS, ET ILS N'ONT PAS LA MÊME DURÉE DE VIE.
 · `brain/poids.json` est COMMITÉ : il suit le projet d'une session à l'autre,
   d'un worktree à l'autre, d'un agent à l'autre. Pour ne pas le réécrire à
   chaque lecture, la date de dernière lecture d'une section n'y bouge qu'une
-  fois par jour.
+  fois par jour. SAUF DANS UN PROJET LOGÉ (2.2.1) : le dépôt est celui du code,
+  partagé par plusieurs personnes ; réécrit chaque jour sur chaque poste, le
+  fichier ferait un conflit à chaque pull. `adopte --projet` l'ignore : chaque
+  poste y tient ses propres compteurs.
 · le registre de session est LOCAL (dossier d'état du paquet) : il retient
   quelles sections ont été lues depuis le dernier verdict, et rien d'autre. Le
   vider quand un résultat tombe est ce qui rend le lien causal : une section

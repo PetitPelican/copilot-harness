@@ -873,7 +873,7 @@ def prefixe_affiche(ou, ancre, defaut):
     return defaut
 
 
-def compose(r, projet, session):
+def compose(r, projet, session, arrivees=None):
     """Le briefing. `r` est le dossier de l'agent, `projet` celui qui porte le
     `.fact/` — le même en mono, `None` avant migration."""
     import agent
@@ -967,6 +967,8 @@ def compose(r, projet, session):
     # un état périmé. Références locales seulement : aucun réseau ici.
     if brain:
         import fusion
+        if arrivees is not None:
+            l.append(arrivees)
         lp = fusion.ligne_briefing(r)
         if lp is not None:
             l.append(lp)
@@ -1391,6 +1393,17 @@ def _main(entree):
     import agent
     s_ = agent.session()
     signature = empreinte(ancre, projet) + ("|%s" % s_.signature() if s_ is not None else "")
+    # CE QUE LES AUTRES ONT APPORTÉ (2.2.1) : un pull qui ne touche que `.logs/`
+    # ne change aucun fichier surveillé — le jeton fait repartir le briefing.
+    jeton_arr, ligne_arr = None, None
+    if r is not None:
+        import fusion
+        try:
+            jeton_arr, ligne_arr = fusion.arrivees(r)
+        except Exception:       # noqa — fail-open : la ligne se tait, le briefing part
+            jeton_arr, ligne_arr = None, None
+    if jeton_arr:
+        signature += "|arrivees=%s" % jeton_arr
     # Sans identifiant on ne déduit jamais que deux appels sont la même session.
     if session and deja_servi(session_etat, signature):
         try:
@@ -1407,7 +1420,7 @@ def _main(entree):
             if l is not None:
                 signaux.append(l)
     if r is not None:
-        texte = compose(r, projet, session)
+        texte = compose(r, projet, session, ligne_arr)
     else:
         texte = avertit_racine(projet)
     try:
@@ -1433,3 +1446,5 @@ def _main(entree):
     if signaux:
         texte = "%s\n\n%s" % ("\n\n".join(signaux), texte)
     emet(evenement, texte)
+    if ligne_arr is not None:
+        fusion.acquitte(r, jeton_arr)
