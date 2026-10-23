@@ -95,6 +95,20 @@ class Adoption(Banc):
         self.assertIn("name: flux-a-ops\n", p.split("---\n")[1])
         self.assertIn("merge=union", self.lis("svc", "flux_a", ".gitattributes"))
 
+    def test_ce_qu_un_agent_recoit_tient_en_300_lignes(self):
+        """POSTE + MÉTHODE + PROFIL ≤ 300 lignes, et un profil ≤ 30 (Maxime, 23/10).
+        Mesuré avant : ~1 020 lignes — deux méthodes, une par le dépôt, une par
+        l'atelier."""
+        self.adopte("svc/flux_a", "OPS,PO,QA", "flux-a")
+        sys.path.insert(0, os.path.join(RACINE, "py"))
+        import atelier
+        poste = len(atelier._gabarit("poste-AGENTS.md").splitlines())
+        methode = len(self.lis(".github", "copilot-instructions.md").splitlines())
+        for r in ("ops", "po", "qa"):
+            profil = len(self.lis(".github", "agents", "flux-a-%s.agent.md" % r).splitlines())
+            self.assertLessEqual(profil, 30, "profil %s : %d lignes" % (r, profil))
+            self.assertLessEqual(poste + methode + profil, 300, (poste, methode, profil))
+
     def test_rien_ne_s_ecrase_et_un_second_passage_ne_pose_rien(self):
         self.adopte("svc/flux_a", "OPS,PO", "flux-a")
         with open(os.path.join(self.depot, "svc", "flux_a", "brain", "mind", "OPS", "todo.md"), "a",

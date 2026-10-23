@@ -52,6 +52,7 @@ D = "\x1b[2m"
 X = "\x1b[0m"
 
 MARQUEUR_METHODE = "<!-- harnais:method:start -->"
+FIN_METHODE = "<!-- harnais:method:end -->"
 
 
 def _p(s=""):
@@ -255,10 +256,19 @@ def instructions(f, projet):
         avant = ""
     except (OSError, UnicodeDecodeError) as e:
         raise copilot.Refus("%s : %s" % (f, equipe.err_es(e)))
+    bloc = "%s\n%s\n%s" % (MARQUEUR_METHODE, methode(projet), FIN_METHODE)
     if MARQUEUR_METHODE in avant:
-        return None
+        # LA MÉTHODE DU PAQUET REMPLACE CELLE D'HIER (2.2.2) : sans quoi un dépôt
+        # adopté garderait à jamais la version de son adoption. Seul le bloc
+        # entre les marques change ; un bloc sans sa fin ne se devine pas.
+        i = avant.find(MARQUEUR_METHODE)
+        k = avant.find(FIN_METHODE, i)
+        if k < 0:
+            return None
+        neuf = avant[:i] + bloc + avant[k + len(FIN_METHODE):]
+        return None if neuf == avant else neuf
     separation = "" if not avant else "\n\n"
-    return "%s%s%s\n%s\n<!-- harnais:method:end -->\n" % (avant, separation, MARQUEUR_METHODE, methode(projet))
+    return "%s%s%s\n" % (avant, separation, bloc)
 
 
 # ── la commande ──────────────────────────────────────────────────────────
@@ -480,7 +490,7 @@ def main(args):
         _e("adopte : %s" % e)
         return 1
     if texte is not None:
-        rap.a_faire.append((inf, "ajouter la méthode locale, en conservant les instructions existantes"))
+        rap.a_faire.append((inf, "poser ou mettre à jour la méthode, en conservant les instructions existantes"))
         ecrits.append((inf, texte))
     else:
         rap.deja.append(inf)
@@ -538,11 +548,16 @@ def main(args):
         try:
             if est_instructions and os.path.exists(p):
                 avant = equipe.lis(p)
-                if not contenu.startswith(avant):
+                if contenu.startswith(avant):
+                    ajout = contenu[len(avant):]
+                    with open(p, "a", encoding="utf-8", newline="") as h:
+                        h.write(ajout)
+                elif instructions(p, racine) == contenu:
+                    # Le bloc de la méthode est remplacé : le fichier relu à
+                    # l'instant donne le même résultat qu'à la prévisualisation.
+                    equipe.ecrit(p, contenu)
+                else:
                     raise OSError("instructions modifiées depuis la prévisualisation")
-                ajout = contenu[len(avant):]
-                with open(p, "a", encoding="utf-8", newline="") as h:
-                    h.write(ajout)
             elif est_settings:
                 equipe.ecrit(p, contenu)
             else:

@@ -312,7 +312,7 @@ def main(args):
         _e("adopte : %s" % e)
         return 1
     if texte is not None:
-        ajouts.append((inf, texte, "la méthode, après le contenu existant"))
+        ajouts.append((inf, texte, "la méthode du paquet, le contenu existant gardé"))
 
     # ── le rapport ───────────────────────────────────────────────────────
     def c_(p):

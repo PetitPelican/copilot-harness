@@ -518,12 +518,13 @@ chargé, il n'y a aucune garde.
 Copilot lit `AGENTS.md` et `CLAUDE.md` sans ordre de priorité général : signaler
 un doublon et ne pas laisser des contenus divergents. Copilot ne remonte pas
 au-dessus de la racine Git pour trouver la méthode. `adopte` ajoute une copie
-dans `.github/copilot-instructions.md`, en conservant le contenu existant.
-Ce branchement est indépendant de `COPILOT_CUSTOM_INSTRUCTIONS_DIRS` :
-le CLI SDK 1.0.90-0 mesuré ne chargeait pas le répertoire supplémentaire.
-La variable reste utile aux hôtes qui la prennent en charge, sans être une
-preuve de chargement. Un bloc de méthode déjà présent est conservé ; sa
-mise à jour doit être réconciliée explicitement avec les règles du projet.
+dans `.github/copilot-instructions.md`, en conservant le contenu existant ;
+relancé, il remplace le bloc de méthode d'hier (entre les marques
+`harnais:method`) et rien d'autre. **Une seule copie par session** (2.2.2) :
+l'installateur n'inscrit plus l'atelier dans `COPILOT_CUSTOM_INSTRUCTIONS_DIRS`
+et retire l'inscription qu'il y avait faite — un agent recevait sinon deux
+méthodes de versions différentes (~1 020 lignes mesurées le 23/10). La racine de
+l'atelier ne porte qu'un renvoi, qui nomme `@user`.
 
 ### 8 bis. Amener un projet existant à la forme actuelle
 

@@ -227,6 +227,46 @@ class Essais(unittest.TestCase):
         self.assertEqual(self.main([d, "--go"]), 0)
         self.assertEqual(lis(f), texte)
 
+    def test_la_methode_d_hier_est_remplacee_et_le_reste_garde(self):
+        """UN DÉPÔT ADOPTÉ HIER REÇOIT LA MÉTHODE D'AUJOURD'HUI (2.2.2) — seul le
+        bloc entre les marques change."""
+        d = self.bac("rafraichit")
+        f = os.path.join(d, ".github/copilot-instructions.md")
+        os.makedirs(os.path.dirname(f))
+        vieux = ("# À moi\n\n%s\nANCIENNE MÉTHODE\n%s\n\n# Après, à moi aussi\n"
+                 % (adopte.MARQUEUR_METHODE, adopte.FIN_METHODE))
+        ecris(f, vieux)
+        self.assertEqual(self.main([d]), 0)
+        self.assertEqual(lis(f), vieux, "à blanc, rien ne change")
+        self.assertEqual(self.main([d, "--go"]), 0)
+        texte = lis(f)
+        self.assertNotIn("ANCIENNE MÉTHODE", texte)
+        self.assertIn("## Les gardes, et quoi faire d'un refus", texte)
+        self.assertTrue(texte.startswith("# À moi\n\n") and texte.endswith("\n\n# Après, à moi aussi\n"))
+        self.assertEqual(texte.count(adopte.MARQUEUR_METHODE), 1)
+        self.assertEqual(self.main([d, "--go"]), 0)
+        self.assertEqual(lis(f), texte, "un second passage ne change rien")
+        # TÉMOIN : un bloc sans sa fin ne se devine pas — rien n'est touché.
+        casse = "%s\nANCIENNE MÉTHODE\n" % adopte.MARQUEUR_METHODE
+        ecris(f, casse)
+        self.assertEqual(self.main([d, "--go"]), 0)
+        self.assertEqual(lis(f), casse)
+
+    def test_la_methode_tient_dans_la_cible(self):
+        """POSTE + MÉTHODE + PROFIL : 200 À 300 LIGNES AU TOTAL (Maxime, 23/10). La
+        méthode seule reste vers 120 lignes, sans récit daté ni historique."""
+        m = adopte._methode_brute()
+        n = len(m.splitlines())
+        self.assertLessEqual(n, 140, "la méthode a regrossi : %d lignes" % n)
+        for date in ("(0.1", "(2.", "Mesuré le"):
+            self.assertNotIn(date, m, "ni récit daté, ni historique de versions")
+        self.assertNotIn("agents/<nom>/AGENTS.md", m, "l'architecture « un dossier par agent » sort")
+        for titre in ("## La mémoire", "## Le format est un contrat", "## Les gardes",
+                      "## À plusieurs", "## Déléguer", "## Les frontières", "## Les réflexes"):
+            self.assertIn(titre, m)
+        self.assertIn("gpt-6.1-sol", m)
+        self.assertIn("gpt-6-luna", m)
+
     def test_une_erreur_de_pose_ne_reussit_pas(self):
         d = self.bac("echec")
         ecris(os.path.join(d, "brain"), "obstacle")

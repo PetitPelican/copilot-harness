@@ -43,8 +43,9 @@ class Essais(Isole):
         self.assertIn("À REMPLIR", poste)
         self.assertEqual(sorted(os.listdir(d)), ["AGENTS.md", "CTO"],
                          "« CTO » : l'adresse que lit le verrou des consignes")
-        self.assertEqual(socle, _gabarit("foundation-AGENTS.md").replace("[UTILISATEUR]", "alice"))
-        self.assertIn("`@user` désigne alice", socle, "la méthode nomme @user")
+        self.assertEqual(socle, _gabarit("atelier-AGENTS.md").replace("[UTILISATEUR]", "alice"))
+        self.assertIn("`@user` désigne alice", socle, "le renvoi nomme @user")
+        self.assertNotIn("## La mémoire", socle, "la méthode n'est qu'une fois : dans le dépôt")
         self.assertTrue("alice" in role and "[UTILISATEUR]" not in role)
         # LE RÔLE DIT OÙ SONT LES CHOSES : la racine en absolu, le paquet, et
         # aucun gabarit laissé brut.

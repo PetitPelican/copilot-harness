@@ -111,10 +111,15 @@ Si la politique PowerShell bloque le script, suivre la politique de son
 organisation ; ne pas désactiver globalement les protections du poste.
 
 L'installateur copie les fichiers du plugin, enregistre la marketplace
-locale `atelier-copilot`, installe `harnais@atelier-copilot`, initialise
-`C:\Atelier\cto` et ajoute l'atelier à
-`COPILOT_CUSTOM_INSTRUCTIONS_DIRS` sans remplacer les valeurs existantes.
-Il préserve la méthode, les instructions et la mémoire déjà présentes.
+locale `atelier-copilot`, installe `harnais@atelier-copilot` et initialise
+`C:\Atelier\cto`. La méthode vit dans `.github\copilot-instructions.md` de
+chaque dépôt adopté, **une seule copie par session** : l'installateur
+n'inscrit plus l'atelier dans `COPILOT_CUSTOM_INSTRUCTIONS_DIRS` (2.2.2), et
+retire l'inscription qu'une version précédente y avait faite — les autres
+valeurs restent. Ce qu'un agent reçoit tient en 200 à 300 lignes : le poste, la
+méthode (~120 lignes), son profil (~30 lignes). Relancer `harnais adopte` dans
+un dépôt déjà adopté y remplace la méthode d'hier, le reste du fichier gardé.
+Il préserve les instructions et la mémoire déjà présentes.
 Les faits nouvellement créés portent des sections **À REMPLIR** :
 l'agent doit les renseigner après lecture du projet.
 

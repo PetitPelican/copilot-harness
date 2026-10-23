@@ -24,8 +24,11 @@ Local unpacked repository/distribution, defaulting to this script's directory.
 .PARAMETER CopilotPath
 Optional explicit CLI executable. Otherwise PATH, then LOCALAPPDATA SDK versions.
 .PARAMETER EnvironmentScope
-User (default): append to both User and Process variables. Process: never writes
-User environment. None: leave environment untouched and print the required step.
+User (default): add the package bin to both User and Process PATH. Process: never
+writes User environment. None: leave environment untouched and print the required step.
+COPILOT_CUSTOM_INSTRUCTIONS_DIRS is no longer written (2.2.2): the method lives in
+each repository's .github/copilot-instructions.md, once per session. A workshop
+entry added by an earlier version is removed on Install/Update, others are kept.
 .PARAMETER CopilotHome
 CLI config directory. Defaults to COPILOT_HOME, otherwise UserHome\.copilot.
 .PARAMETER UserHome
@@ -248,23 +251,6 @@ function Has-Token([string]$Value, [string]$Token) {
         }
     }
     return $false
-}
-
-function Add-Environment {
-    if ($EnvironmentScope -eq 'None') { return }
-    $scopes = @('Process')
-    if ($EnvironmentScope -eq 'User') { $scopes = @('User', 'Process') }
-    foreach ($scope in $scopes) {
-        $before = [Environment]::GetEnvironmentVariable($script:EnvironmentName, $scope)
-        if (!(Has-Token $before $WorkshopRoot)) {
-            $after = if ([string]::IsNullOrEmpty($before)) { $WorkshopRoot } else { "$before,$WorkshopRoot" }
-            if (!$script:State.environment.ContainsKey($scope)) {
-                $script:State.environment[$scope] = @{ before = $before; after = $after }
-                Save-State
-            }
-            [Environment]::SetEnvironmentVariable($script:EnvironmentName, $after, $scope)
-        }
-    }
 }
 
 function Move-Workshop([string]$Old) {
@@ -606,7 +592,7 @@ Write-Host "$Action | source: $SourcePath | destination: $Destination"
 Write-Host "CLI: $script:Cli | config: $CopilotHome"
 Write-Host "Workshop: $WorkshopRoot | CTO: $CtoName | user: $UserName | environment: $EnvironmentScope"
 if ($script:MovedFrom) {
-    Write-Host "Workshop moved: $script:MovedFrom -> $WorkshopRoot (journal and instructions environment will follow; nothing is created at the old path)."
+    Write-Host "Workshop moved: $script:MovedFrom -> $WorkshopRoot (the journal follows; nothing is created at the old path)."
 }
 $memoryOwned = $script:State.ContainsKey('memory') -and $script:State.memory
 if ($Action -eq 'Uninstall') {
@@ -628,6 +614,9 @@ if (!$Go -or !$script:InstallerPSCmdlet.ShouldProcess($Destination, "$Action har
     } else {
         Write-Host "Install/update runs: copilot plugin marketplace add `"$Destination`"; copilot plugin install $script:Plugin"
         Write-Host "Workshop command: harnais atelier-monte --racine `"$WorkshopRoot`" --cto `"$CtoName`" --utilisateur `"$UserName`" --go"
+        if ($script:State.environment -and $script:State.environment.Count) {
+            Write-Host "Instructions: remove $WorkshopRoot from $script:EnvironmentName (added by an earlier version; the method lives in each repository)."
+        }
         if ($EnvironmentScope -ne 'None') {
             Write-Host "PATH ($EnvironmentScope): add $(Join-Path $Destination 'bin') so that the ``harnais`` command resolves in agent sessions (removed on uninstall)."
         }
@@ -730,7 +719,10 @@ try {
                 throw "atelier-monte did not create the required workshop file: $rel"
             }
         }
-        Add-Environment
+        # ONE COPY OF THE METHOD PER SESSION (2.2.2): every adopted repository
+        # carries it; the workshop entry an earlier version added would load a
+        # second, older copy. Only the entry this installer owns is removed.
+        Remove-Environment
         Add-BinPath
         Write-Host "Installed. Fill CTO memory, then open a NEW Copilot session in $cto."
     }
@@ -739,7 +731,6 @@ try {
     } elseif ($EnvironmentScope -eq 'Process') {
         Write-Host 'Process-only environment: start the next Copilot session from THIS PowerShell process.'
     } else {
-        Write-Host "Environment unchanged. Preserve existing comma-separated values and add $WorkshopRoot to $script:EnvironmentName before starting Copilot."
         Write-Host "Add $(Join-Path $Destination 'bin') to PATH yourself, or agents will not find the ``harnais`` command."
     }
     Write-Host 'Hooks are not proven until a briefing is observed in that new session.'

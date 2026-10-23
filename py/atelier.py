@@ -181,8 +181,11 @@ def main(args):
         import hote
         pose(_gabarit("poste-AGENTS.md").replace("[UTILISATEUR]", qui),
              os.path.join(hote.maison_copilot(), "copilot-instructions.md"), go, faits, ignores)
-        # 1. L'ÉTAGE 2, les consignes communes, à la racine. C'est l'artefact portable.
-        pose(_gabarit("foundation-AGENTS.md").replace("[UTILISATEUR]", qui),
+        # 1. La racine ne porte qu'un renvoi : la méthode vit dans chaque dépôt
+        #    (2.2.2). Deux copies par session — l'une ici par
+        #    COPILOT_CUSTOM_INSTRUCTIONS_DIRS, l'autre dans le dépôt — doublaient
+        #    les instructions. `nom_de_user` y lit encore le nom de @user.
+        pose(_gabarit("atelier-AGENTS.md").replace("[UTILISATEUR]", qui),
              os.path.join(racine, "AGENTS.md"), go, faits, ignores)
         # 2. Le poste du CTO. Son rôle seulement — la méthode, il l'hérite.
         if os.path.exists(os.path.join(cto, "CLAUDE.md")):
@@ -239,13 +242,12 @@ def main(args):
     _p("À faire ensuite :")
     _p("- REMPLIR la mémoire du CTO : le cap dans `brain/fact/base.md`, l'état et ce qui "
        "attend dans `brain/mind/`. Tant qu'ils portent « À REMPLIR », le briefing le dit.")
-    _p("- LE SOCLE de la racine ne porte QUE la méthode. Le poste (comptes, sessions, "
-       "réseau, mémoire vive) va dans ~/.copilot/copilot-instructions.md ; le rôle et les règles "
-       "métier, dans AGENTS.md de chaque projet.")
-    _p("- La méthode est aussi dans .github/copilot-instructions.md du CTO.\n  Ajouter %s à "
-       "COPILOT_CUSTOM_INSTRUCTIONS_DIRS sans remplacer les valeurs existantes\n  reste optionnel "
-       "selon l'hôte ; install.ps1 le fait de façon idempotente.\n  Ouvrir une nouvelle session et "
-       "contrôler /instructions." % racine)
+    _p("- LA RACINE ne porte qu'un renvoi. Le poste (comptes, sessions, réseau, mémoire "
+       "vive) va dans ~/.copilot/copilot-instructions.md ; le rôle de chaque agent, dans son "
+       "profil ; les règles métier, dans les faits du projet.")
+    _p("- La méthode est dans .github/copilot-instructions.md du CTO, comme dans chaque dépôt\n  "
+       "adopté : une seule copie par session. Ne pas ajouter %s à\n  "
+       "COPILOT_CUSTOM_INSTRUCTIONS_DIRS. Ouvrir une nouvelle session et contrôler /instructions." % racine)
     _p("- LA PREUVE : dans une session ouverte DANS le dossier du CTO, un briefing doit "
        "s'afficher au démarrage. Un hook qu'on n'a pas vu se déclencher n'est pas un hook vérifié.")
     _p("- LA SUITE : pour chaque projet, `harnais adopte` dans son dossier.")

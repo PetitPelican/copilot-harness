@@ -41,9 +41,9 @@ description: >
 `CLAUDE.md`.** Si ce dernier existe, signaler le doublon et ne pas poser un
 `AGENTS.md` contradictoire. Copilot ne remonte pas au-dessus de la racine git :
 `adopte` ajoute donc la méthode dans `.github/copilot-instructions.md`
-du dépôt, après les instructions existantes. La variable
-`COPILOT_CUSTOM_INSTRUCTIONS_DIRS` reste un complément pour les hôtes
-qui la prennent en charge. Ne pas placer le rôle du CTO dans la méthode.
+du dépôt, après les instructions existantes — une seule copie par session :
+ne pas ajouter l'atelier à `COPILOT_CUSTOM_INSTRUCTIONS_DIRS`, la racine ne
+porte qu'un renvoi. Ne pas placer le rôle du CTO dans la méthode.
 
 ## Le geste
 
@@ -74,8 +74,9 @@ Une déclaration réussie arrête cet accueil ; commiter le registre pour les
 prochaines sessions en worktree.
 
 **Avant la nouvelle session, contrôler les instructions locales.**
-`install.ps1` ajoute aussi l'atelier à `COPILOT_CUSTOM_INSTRUCTIONS_DIRS`
-sans écraser les valeurs existantes ; `atelier-monte` ne pose pas cette variable.
+`install.ps1` n'inscrit plus l'atelier dans `COPILOT_CUSTOM_INSTRUCTIONS_DIRS`
+et retire l'inscription d'une version précédente ; `/instructions` doit montrer
+la méthode une seule fois.
 Vérifier la racine git avec `git rev-parse --show-toplevel` : la configuration
 Copilot est liée à cette racine, pas au dossier de lancement.
 

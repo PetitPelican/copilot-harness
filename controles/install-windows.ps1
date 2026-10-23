@@ -156,13 +156,13 @@ try {
     $settings = Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json
     Assert ($settings.permissions.allow[0] -eq 'keep' -and $settings.enabledPlugins.'other@market') 'Unrelated settings preserved'
     Assert ($settings.extraKnownMarketplaces.'atelier-copilot'.source.path -eq $destination) 'Workshop points at copied, not source, payload'
-    Assert ($env:COPILOT_CUSTOM_INSTRUCTIONS_DIRS -ceq "C:\existing-one, C:\existing-two ,$workshop") 'Comma-separated Process environment appended without rewriting values'
+    Assert ($env:COPILOT_CUSTOM_INSTRUCTIONS_DIRS -ceq 'C:\existing-one, C:\existing-two ') 'Instructions environment untouched: the method lives in each repository'
     Assert (!(Test-Path -LiteralPath (Join-Path $workshop 'cto\.claude'))) 'No .claude directory created (Copilot would read it)'
     Assert ((Test-Path -LiteralPath (Join-Path $destination '.github\plugin\marketplace.json'))) 'Copied self-contained marketplace'
     $beforeSettings = Get-FileHash -LiteralPath $settingsPath
     & $installer @params -Go
     Assert ((Get-FileHash -LiteralPath $settingsPath).Hash -eq $beforeSettings.Hash) 'Repeat installation does not rewrite settings'
-    Assert (@($env:COPILOT_CUSTOM_INSTRUCTIONS_DIRS -split ',' | Where-Object { $_ -eq $workshop }).Count -eq 1) 'Repeat installation does not duplicate environment token'
+    Assert (@($env:COPILOT_CUSTOM_INSTRUCTIONS_DIRS -split ',' | Where-Object { $_ -eq $workshop }).Count -eq 0) 'Repeat installation never adds the workshop to the instructions environment'
     $binDir = Join-Path $destination 'bin'
     Assert (@($env:PATH -split ';' | Where-Object { $_ -eq $binDir }).Count -eq 1) 'Install adds the package bin to PATH exactly once'
     Assert ((Get-Command harnais -ErrorAction SilentlyContinue) -and (& harnais version) -match '^\d+\.\d+\.\d+') 'The harnais command resolves through PATH'
@@ -190,7 +190,7 @@ try {
     $remaining = Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json
     Assert ($remaining.enabledPlugins.'new@other' -and $remaining.enabledPlugins.'other@market') 'Uninstall preserves original and subsequently added settings'
     Assert (!($remaining.enabledPlugins.PSObject.Properties.Name -contains 'harnais@atelier-copilot')) 'Uninstall removes only owned plugin key'
-    Assert ($env:COPILOT_CUSTOM_INSTRUCTIONS_DIRS -ceq 'C:\existing-one, C:\existing-two ,C:\added-later') 'Uninstall removes only owned environment token'
+    Assert ($env:COPILOT_CUSTOM_INSTRUCTIONS_DIRS -ceq 'C:\existing-one, C:\existing-two ,C:\added-later') 'Uninstall leaves the unowned instructions environment as is'
     Assert (@($env:PATH -split ';' | Where-Object { $_ -eq $binDir }).Count -eq 0 -and $env:PATH.Contains($originalPath.Split(';')[0])) 'Uninstall removes only the package bin from PATH'
     $globalRemaining = Get-Content -LiteralPath (Join-Path $config 'settings.json') -Raw | ConvertFrom-Json
     Assert ($globalRemaining.customUnrelatedSetting -eq 'global-keep' -and $globalRemaining.enabledPlugins.'existing@other' -eq $false) 'CLI uninstall preserves unrelated global configuration'
