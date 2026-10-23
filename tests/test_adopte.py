@@ -253,7 +253,7 @@ class Essais(unittest.TestCase):
         self.assertEqual(lis(f), casse)
 
     def test_la_methode_tient_dans_la_cible(self):
-        """POSTE + MÉTHODE + PROFIL : 200 À 300 LIGNES AU TOTAL (Maxime, 23/10). La
+        """POSTE + MÉTHODE + PROFIL : 200 À 300 LIGNES AU TOTAL (cible fixée le 23/10). La
         méthode seule reste vers 120 lignes, sans récit daté ni historique."""
         m = adopte._methode_brute()
         n = len(m.splitlines())

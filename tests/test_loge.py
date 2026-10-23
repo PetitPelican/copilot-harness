@@ -96,7 +96,7 @@ class Adoption(Banc):
         self.assertIn("merge=union", self.lis("svc", "flux_a", ".gitattributes"))
 
     def test_ce_qu_un_agent_recoit_tient_en_300_lignes(self):
-        """POSTE + MÉTHODE + PROFIL ≤ 300 lignes, et un profil ≤ 30 (Maxime, 23/10).
+        """POSTE + MÉTHODE + PROFIL ≤ 300 lignes, et un profil ≤ 30 (cible fixée le 23/10).
         Mesuré avant : ~1 020 lignes — deux méthodes, une par le dépôt, une par
         l'atelier."""
         self.adopte("svc/flux_a", "OPS,PO,QA", "flux-a")
